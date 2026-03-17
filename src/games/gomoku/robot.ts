@@ -1,8 +1,33 @@
-import { GamePlugin, type GameMessage } from "../../plugins/types";
+import { GameRobot, type GameMessage } from "../../types";
 
-export default class Gomoku extends GamePlugin {
+interface GomokuState {
+  board: number[][];
+  currentPlayer: number;
+  winner: number | null;
+  isGameOver: boolean;
+}
+
+export default class GomokuRobot extends GameRobot {
   readonly slug = 'gomoku';
-  override transform(message: GameMessage) {
-    return message.event === "ACTION_REQUIRED" ? message.data : null;
+  state: GomokuState;
+  constructor() {
+    super()
+    this.state = {
+      board: [],
+      currentPlayer: 1,
+      winner: null,
+      isGameOver: false
+    }
+  }
+  // 处理消息
+  override react(message: GameMessage): { event: string, data?: any } | undefined {
+    if (message.event === 'room:player-action') {
+      
+    }
+    return;
+  }
+  // 获取快照
+  override getSnapShot() {
+
   }
 }

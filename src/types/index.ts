@@ -15,8 +15,13 @@ export interface AIDecision {
   data: any;
 }
 
-export abstract class GamePlugin {
+export abstract class GameRobot {
+  // 游戏别名插槽
   abstract readonly slug: string;
-  // 过滤并转换游戏消息为 AI 能够理解的格式
-  abstract transform(message: GameMessage): any | null;
+  // 游戏数据
+  abstract state: any;
+  // 立即处理消息
+  abstract react(message: GameMessage): { event: string, data?: any } | undefined;
+  // 获取快照数据
+  abstract getSnapShot(): any;
 }

@@ -1,3 +1,5 @@
+import type { AIDecision } from "../types";
+
 // src/engine/WorkerPool.ts
 export class WorkerPool {
   private workers: Worker[] = [];
@@ -10,7 +12,8 @@ export class WorkerPool {
       worker.onmessage = (e) => {
         const { taskId, decision } = e.data;
         if (this.pendingTasks.has(taskId)) {
-          this.pendingTasks.get(taskId)!(decision);
+          const onRequestDecision = this.pendingTasks.get(taskId);
+          onRequestDecision!(decision);
           this.pendingTasks.delete(taskId);
         }
       };
@@ -18,7 +21,7 @@ export class WorkerPool {
     }
   }
 
-  async compute(slug: string, payload: any): Promise<any> {
+  async compute(slug: string, payload: any): Promise<AIDecision> {
     const taskId = crypto.randomUUID();
     const worker = this.workers[this.nextWorkerIndex++ % this.workers.length];
 

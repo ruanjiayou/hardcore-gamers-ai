@@ -6,7 +6,6 @@ export interface GameMessage {
 
 export interface AIInput {
   slug: string;
-  botId: string;
   payload: any;
 }
 
@@ -20,7 +19,12 @@ export abstract class GameRobot {
   abstract readonly slug: string;
   // 游戏数据
   abstract state: any;
-  // 立即处理消息
+  // 共享buffer
+  static sharedBuffer: SharedArrayBuffer;
+  /**
+   * 审批
+   * @param message socket消息
+   */
   abstract react(message: GameMessage): { event: string, data?: any } | undefined;
   // 获取快照数据
   abstract getSnapShot(): any;

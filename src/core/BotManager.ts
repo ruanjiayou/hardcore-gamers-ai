@@ -17,8 +17,8 @@ export class BotManager {
     if (!GameRobot) throw new Error(`No plugin for ${data.slug}`);
 
     const bot = new BotInstance(data, new GameRobot(), async (instance: BotInstance, input: AIInput) => {
-      // 核心流程(reply：收到消息 -> 派发计算 -> 异步返回 -> 发送消息
-      const decision = await this.workerPool.compute(data.slug, input);
+      // 核心流程(reply)：(socket)收到消息 -> 派发计算(postMessage) -> 异步返回(resolve) -> (socket)发送消息
+      const decision = await this.workerPool.dispatch(data.slug, input);
       instance.send(decision.event, decision.data);
     });
 

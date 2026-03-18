@@ -1,7 +1,12 @@
 import type { GameRobot } from "../types";
 import gomoku from "./gomoku/robot";
 
-const GameRobots: { [key: string]: new (...args: any[]) => GameRobot } = {
+interface GameRobotConstructor {
+  new(...args: any[]): GameRobot;
+  sharedBuffer: SharedArrayBuffer;  // 声明静态属性
+}
+
+const GameRobots: { [key: string]: GameRobotConstructor } = {
   gomoku,
 }
 

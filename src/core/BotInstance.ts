@@ -7,7 +7,7 @@ type Data = {
   slug: string,
   serverUrl: string,
   tokens: { access_token: string, refresh_token: string }
-  room: any,
+  room_id: string,
 }
 
 export class BotInstance {
@@ -25,14 +25,14 @@ export class BotInstance {
     });
 
     this.socket.onAny(async (event, data) => {
-      console.log(event)
+      console.log(event, JSON.stringify(data))
       const message = this.gamePlayer.react({ event, data });
       if (message) {
         await this.reply(this, message);
       }
     });
     this.socket.once('connect', () => {
-      this.socket.emit('lobby:join-room', { room_id: data.room._id }, (success: boolean) => {
+      this.socket.emit('lobby:join-room', { room_id: data.room_id }, (success: boolean) => {
         console.log('加入房间', success)
       });
     })

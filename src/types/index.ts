@@ -6,7 +6,11 @@ export interface GameMessage {
 
 export interface AIInput {
   slug: string;
-  payload: any;
+  type: 'message' | 'compute';
+  payload: {
+    event: string;
+    data: any
+  };
 }
 
 export interface AIDecision {

@@ -51,7 +51,6 @@ export default class GomokuRobot extends GameRobot {
 
   // 获取快照
   override getSnapShot() {
-    const { low, high } = Zobrist.split(this.state.currentHash);
     return {
       hash: this.state.currentHash,
       turn: this.state.turn,

@@ -11,10 +11,20 @@ enum PLAYER_ROLE {
 export default class GomokuAI {
   width: number;
   height: number;
-  empty: 0;
-  score: { [key: string]: number };
+  debug: boolean = false;
+  empty: 0 = 0;// 空位标记
+  score = {
+    FIVE: 100000,      // 连五
+    LIVE_FOUR: 10000,  // 活四
+    SLEEP_FOUR: 1000,  // 冲四（死四）
+    LIVE_THREE: 1000,  // 活三
+    SLEEP_THREE: 100,  // 眠三
+    LIVE_TWO: 100,     // 活二
+    SLEEP_TWO: 10,     // 眠二
+  };
   transTable: TranspositionTable;
-  dirs: number[][];
+  // 方向向量：水平、垂直、对角线、反对角线
+  dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
   private patterns: Map<number, { regex: RegExp, score: number }[]> = new Map();
   private preparePatterns(p: number) {
     const self = p.toString();
@@ -62,24 +72,10 @@ export default class GomokuAI {
   constructor(table: TranspositionTable, width: number = 15, height: number = 15) {
     this.width = width;
     this.height = height;
-    this.empty = 0;      // 空位标记
-    // 棋型分数（从高到低）
-    this.score = {
-      FIVE: 100000,      // 连五
-      LIVE_FOUR: 10000,  // 活四
-      SLEEP_FOUR: 1000,  // 冲四（死四）
-      LIVE_THREE: 1000,  // 活三
-      SLEEP_THREE: 100,  // 眠三
-      LIVE_TWO: 100,     // 活二
-      SLEEP_TWO: 10,     // 眠二
-    };
 
     this.preparePatterns(1);
     this.preparePatterns(2);
     this.transTable = table; // 置换表 { hash: { depth, score, flag, bestMove } }
-
-    // 方向向量：水平、垂直、对角线、反对角线
-    this.dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
   }
   encodeMove(p: { x: number, y: number }): number {
     // 简单校验，防止越界
@@ -94,27 +90,28 @@ export default class GomokuAI {
   }
   // 公开接口：传入当前棋盘（二维数组），当前要走的玩家（1或2），搜索深度，返回最佳落子 { x, y }
   getBestMove(payload: { board: number[][], turn: number, hash: bigint, depth?: number }) {
-    const { board, turn, hash, depth = 4 } = payload;
+    const { board, turn, hash, depth = 3 } = payload;
     // 初始化走法列表
     let moves = this.generateMoves(board);
-    if (moves.length === 0) return null; // 棋盘已满
+    if (!moves[0]) return null; // 棋盘已满
 
     // 使用迭代加深，优先用浅层搜索结果作为深层搜索的启发
     let bestMove = moves[0];
+    let bestScore = -Infinity;
     for (let d = 1; d <= depth; d++) {
       let alpha = -Infinity;
       let beta = Infinity;
-      let bestScore = -Infinity;
+      bestScore = -Infinity;
       for (let move of moves) {
         // 尝试落子
         board[move.x][move.y] = turn;
+        if (this.isWin(board, move.x, move.y, turn)) {
+          board[move.x][move.y] = this.empty;
+          return move;
+        }
         const next_hash = Zobrist.update(hash, turn, move.x, move.y)
         let score = -this.alphaBeta(board, this.opponent(turn), d - 1, -beta, -alpha, next_hash);
         board[move.x][move.y] = this.empty; // 回溯
-        Zobrist.update(hash, turn, move.x, move.y)
-        if (score >= this.score.FIVE) {
-          return bestMove;
-        }
         if (score > bestScore) {
           bestScore = score;
           bestMove = move;
@@ -156,9 +153,12 @@ export default class GomokuAI {
 
     for (let move of moves) {
       board[move.x][move.y] = player;
+      if (this.isWin(board, move.x, move.y, player)) {
+        return this.score.FIVE;
+      }
       const next_hash = Zobrist.update(hash, player, move.x, move.y)
-      let score = -this.alphaBeta(board, this.opponent(player), depth - 1, -beta, -alpha, next_hash);
-      Zobrist.update(hash, player, move.x, move.y)
+      let score: number = -this.alphaBeta(board, this.opponent(player), depth - 1, -beta, -alpha, next_hash);
+      board[move.x][move.y] = this.empty;
       if (score > bestScore) {
         bestScore = score;
         bestMove = move;
@@ -227,22 +227,97 @@ export default class GomokuAI {
     });
   }
   /**
-   * 对单条线进行棋型分析
-   */
-  private scoreLine(line: number[], p: number): number {
-    const s = line.join("");
-    const pSet = this.patterns.get(p)!;
-    let total = 0;
+ * 高性能行扫描函数 (非正则版)
+ * 遍历一次数组，通过计数器识别棋型
+ */
+  public scoreLine(line: number[], p: number): number {
+    const len = line.length;
+    if (len < 5) return 0;
 
-    for (const item of pSet) {
-      // 使用 matchAll 直接获取所有匹配（包括重叠）
-      const matches = Array.from(s.matchAll(item.regex));
-      if (matches.length > 0) {
-        total += matches.length * item.score;
+    let totalScore = 0;
+    const opp = p === 1 ? 2 : 1;
+
+    let i = 0;
+    while (i < len) {
+      if (line[i] === p) {
+        let count = 0;
+        let leftOpen = i > 0 && line[i - 1] === 0;
+
+        // 统计连续棋子长度
+        while (i < len && line[i] === p) {
+          count++;
+          i++;
+        }
+
+        // 判定右侧是否开放
+        let rightOpen = i < len && line[i] === 0;
+
+        // 根据长度和两端开放情况打分
+        totalScore += this.calculatePattern(count, leftOpen, rightOpen);
+      } else {
+        i++;
       }
     }
-    return total;
+
+    // 额外处理：跳冲棋型 (例如 11011 或 10111)
+    // 这种棋型在五子棋中非常致命，简单的连续计数会漏掉它
+    totalScore += this.scanJumpPatterns(line, p);
+    const index = line.findIndex(v => v !== 0);
+    // index !== -1 && console.log(line.join('|'), totalScore)
+    return totalScore;
   }
+
+  /**
+   * 基础连续棋型评估逻辑
+   */
+  private calculatePattern(count: number, leftOpen: boolean, rightOpen: boolean): number {
+    if (count >= 5) return this.score.FIVE;
+
+    if (count === 4) {
+      if (leftOpen && rightOpen) return this.score.LIVE_FOUR;
+      if (leftOpen || rightOpen) return this.score.SLEEP_FOUR;
+    }
+
+    if (count === 3) {
+      if (leftOpen && rightOpen) return this.score.LIVE_THREE;
+      if (leftOpen || rightOpen) return this.score.SLEEP_THREE;
+    }
+
+    if (count === 2) {
+      if (leftOpen && rightOpen) return this.score.LIVE_TWO;
+      if (leftOpen || rightOpen) return this.score.SLEEP_TWO;
+    }
+
+    return 0;
+  }
+
+  /**
+   * 处理跳冲棋型 (中间带一个空格的棋型)
+   * 专门识别 11011, 10111, 11101 等
+   */
+  private scanJumpPatterns(line: number[], p: number): number {
+    let jumpScore = 0;
+    // 扫描长度为 5 的窗口
+    for (let i = 0; i <= line.length - 5; i++) {
+      let pCount = 0;
+      let emptyIdx = -1;
+      let hasOpp = false;
+
+      for (let j = 0; j < 5; j++) {
+        if (line[i + j] === p) pCount++;
+        else if (line[i + j] === 0) emptyIdx = j;
+        else { hasOpp = true; break; }
+      }
+
+      // 如果 5 格内有 4 个己方棋子且中间有一个空格，且没有对方棋子
+      if (!hasOpp && pCount === 4 && emptyIdx !== -1) {
+        // 这属于“冲四”的一种变形
+        jumpScore += this.score.SLEEP_FOUR;
+      }
+    }
+    return jumpScore;
+  }
+
   // 评估函数：返回从当前玩家视角的分数（正值有利）
   evaluate(board: number[][], player: number): number {
     const width = board.length;
@@ -295,7 +370,62 @@ export default class GomokuAI {
 
     return playerScore - opponentScore;
   }
+  /**
+ * 快速判断当前落子是否导致胜利
+ * @param board 当前棋盘状态
+ * @param x 落子的横坐标
+ * @param y 落子的纵坐标
+ * @param color 当前落子的玩家颜色 (1 或 2)
+ * @returns boolean 是否达成五连
+ */
+  isWin(board: number[][], x: number, y: number, color: number): boolean {
+    // 四个检查方向：水平、垂直、左上到右下、右上到左下
+    const dirs = [
+      [1, 0],  // 水平
+      [0, 1],  // 垂直
+      [1, 1],  // 正斜线
+      [1, -1]  // 反斜线
+    ];
+
+    const width = 15;  // 棋盘宽度
+    const height = 15; // 棋盘高度
+
+    for (let [dx, dy] of dirs) {
+      let count = 1; // 初始计入当前落下的这一颗子
+
+      // 1. 沿正方向延伸检查
+      let tx = x + dx;
+      let ty = y + dy;
+      while (
+        tx >= 0 && tx < width &&
+        ty >= 0 && ty < height &&
+        board[tx][ty] === color
+      ) {
+        count++;
+        tx += dx;
+        ty += dy;
+      }
+
+      // 2. 沿反方向延伸检查
+      tx = x - dx;
+      ty = y - dy;
+      while (
+        tx >= 0 && tx < width &&
+        ty >= 0 && ty < height &&
+        board[tx][ty] === color
+      ) {
+        count++;
+        tx -= dx;
+        ty -= dy;
+      }
+
+      // 如果在该方向上连续棋子达到或超过 5 颗，则获胜
+      if (count >= 5) return true;
+    }
+
+    return false;
+  }
   opponent(player: number) {
-    return player === PLAYER_ROLE.black ? PLAYER_ROLE.white : PLAYER_ROLE.white;
+    return player === PLAYER_ROLE.black ? PLAYER_ROLE.white : PLAYER_ROLE.black;
   }
 }

@@ -26,7 +26,7 @@ export class WorkerPool {
     }
   }
   // 派发worker去计算
-  async dispatch(slug: string, input: AIInput): Promise<AIDecision> {
+  async dispatch(slug: string, input: { event: string; data: any }): Promise<AIDecision> {
     const group = this.workersMap.get(slug);
     if (!group) {
       throw new Error(`No Workers for group ${slug}`)

@@ -12,7 +12,7 @@ export class BotManager {
     this.workerPool = new WorkerPool(new URL("../games/worker.ts", import.meta.url).href);
   }
 
-  addBot(data: { player_id: string, slug: string, serverUrl: string, tokens: { access_token: string, refresh_token: string }, room: any }) {
+  addBot(data: { player_id: string, slug: string, serverUrl: string, tokens: { access_token: string, refresh_token: string }, room_id: string }) {
     const GameRobot = GameRobots[data.slug];
     if (!GameRobot) throw new Error(`No plugin for ${data.slug}`);
 

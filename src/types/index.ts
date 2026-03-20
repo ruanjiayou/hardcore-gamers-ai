@@ -1,4 +1,3 @@
-// src/plugins/types.ts
 export interface GameMessage {
   event: string;
   data: any;
@@ -18,18 +17,23 @@ export interface AIDecision {
   data: any;
 }
 
-export abstract class GameRobot {
-  // 游戏别名插槽
-  abstract readonly slug: string;
-  // 游戏数据
-  abstract state: any;
-  // 共享buffer
-  static sharedBuffer: SharedArrayBuffer;
-  /**
-   * 审批
-   * @param message socket消息
-   */
-  abstract react(message: GameMessage): { event: string, data?: any } | undefined;
-  // 获取快照数据
-  abstract getSnapShot(): any;
+export interface IPlayer {
+  _id: string;
+  type: string; // player robot
+  user_id: string;
+  game_id: string;
+  nickname: string;
+  avatar: string;
+
+  title: string; // 称号
+  level: number; // 等级
+  score: number; // 分数
+  exp: number; // 经验值
+  max_level: number;
+  stats: { [key: string]: number };
+  atline: boolean;
+  status: number; // 1 normal 2 muted 3 banned
+  state: string;
+  createdAt: Date;
+  updatedAt: Date;
 }

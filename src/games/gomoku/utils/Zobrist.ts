@@ -3,6 +3,7 @@
 /**
  * 使用 Mulberry32 算法实现的确定性随机数生成器
  * 确保所有 Worker 生成的 Zobrist 表完全一致
+ * player 0/1/2 对应 role empty/black/white
  */
 function createPRNG(seed: number) {
   return function () {
@@ -42,7 +43,7 @@ export class Zobrist {
    * 计算整盘棋的初始 Hash (通常在对局开始或断线重连时使用)
    * board: 0 为空, 1 为黑棋, 2 为白棋
    */
-  static calculate(board: number[][], currentTurn: number): bigint {
+  static calculate(board: number[][], currentTurn: 'black' | 'white'): bigint {
     let h = 0n;
     for (let r = 0; r < this.BOARD_SIZE; r++) {
       for (let c = 0; c < this.BOARD_SIZE; c++) {
@@ -54,7 +55,7 @@ export class Zobrist {
         }
       }
     }
-    if (currentTurn === 2) h ^= this.sideToMove;
+    if (currentTurn === 'white') h ^= this.sideToMove;
     return h;
   }
 
@@ -63,7 +64,8 @@ export class Zobrist {
    * @param oldHash 当前 Hash
    * @param player  当前落子玩家 (1 或 2)
    */
-  static update(oldHash: bigint, player: number, row: number, col: number): bigint {
+  static update(oldHash: bigint, role: 'black' | 'white', row: number, col: number): bigint {
+    const player = role === 'black' ? 1 : 2
     // 再次 XOR 相同的数值即为“添加”或“移除”该棋子
     // @ts-ignore
     return oldHash ^ this.table[row][col][player - 1] ^ this.sideToMove;

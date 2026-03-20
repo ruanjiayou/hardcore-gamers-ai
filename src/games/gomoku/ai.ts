@@ -1,7 +1,7 @@
 // @ts-ignore
 
-import { TranspositionTable, TTFlag } from "./TranspositionTable";
-import { Zobrist } from "./Zobrist";
+import { TranspositionTable, TTFlag } from "./utils/TranspositionTable";
+import { Zobrist } from "./utils/Zobrist";
 
 enum PLAYER_ROLE {
   black = 1, // 黑棋（通常AI执黑，可根据需要调整）
@@ -89,7 +89,7 @@ export default class GomokuAI {
     };
   }
   // 公开接口：传入当前棋盘（二维数组），当前要走的玩家（1或2），搜索深度，返回最佳落子 { x, y }
-  getBestMove(payload: { board: number[][], turn: number, hash: bigint, depth?: number }) {
+  getBestMove(payload: { board: number[][], turn: 'black' | 'white', hash: bigint, depth?: number }) {
     const { board, turn, hash, depth = 3 } = payload;
     // 初始化走法列表
     let moves = this.generateMoves(board);
@@ -104,13 +104,13 @@ export default class GomokuAI {
       bestScore = -Infinity;
       for (let move of moves) {
         // 尝试落子
-        board[move.x][move.y] = turn;
-        if (this.isWin(board, move.x, move.y, turn)) {
+        board[move.x][move.y] = turn === 'black' ? 1 : 2;
+        if (this.isWin(board, move.x, move.y, PLAYER_ROLE[turn])) {
           board[move.x][move.y] = this.empty;
           return move;
         }
         const next_hash = Zobrist.update(hash, turn, move.x, move.y)
-        let score = -this.alphaBeta(board, this.opponent(turn), d - 1, -beta, -alpha, next_hash);
+        let score = -this.alphaBeta(board, this.opponent(PLAYER_ROLE[turn]), d - 1, -beta, -alpha, next_hash);
         board[move.x][move.y] = this.empty; // 回溯
         if (score > bestScore) {
           bestScore = score;
@@ -156,7 +156,7 @@ export default class GomokuAI {
       if (this.isWin(board, move.x, move.y, player)) {
         return this.score.FIVE;
       }
-      const next_hash = Zobrist.update(hash, player, move.x, move.y)
+      const next_hash = Zobrist.update(hash, player === 1 ? 'black' : 'white', move.x, move.y)
       let score: number = -this.alphaBeta(board, this.opponent(player), depth - 1, -beta, -alpha, next_hash);
       board[move.x][move.y] = this.empty;
       if (score > bestScore) {

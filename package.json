@@ -4,15 +4,17 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch src/index.ts"
+    "dev": "bun run --hot src/index.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/lodash": "4.17.24"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
+    "lodash": "4.17.23",
     "socket.io-client": "4.8.3"
   }
 }

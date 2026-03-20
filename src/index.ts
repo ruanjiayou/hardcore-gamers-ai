@@ -22,6 +22,8 @@ const server = Bun.serve({
           $player_id: data.player_id,
           $serverUrl: data.serverUrl,
           $slug: data.slug,
+          $role: data.role || 1,
+          $match_id: data.match_id || '',
           $room_id: data.room_id,
           $tokens: JSON.stringify(data.tokens)
         }))

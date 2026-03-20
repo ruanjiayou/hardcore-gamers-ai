@@ -1,32 +1,28 @@
 import type { AIDecision, AIInput } from "../types";
 import GameRobots from "../games/robots";
 
-const slugs = Object.keys(GameRobots);
+type SLUG = keyof typeof GameRobots
 
-// src/engine/WorkerPool.ts
 export class WorkerPool {
   private workersMap: Map<string, Worker[]> = new Map();
   private indexMap: Map<string, number> = new Map();
   private pendingTasks = new Map<string, (value: any) => void>();
 
-  constructor(workerPath: string, poolSize: number = navigator.hardwareConcurrency) {
-    for (let i = 0; i < slugs.length; i++) {
-      const slug = slugs[i] as string;
+  constructor(list: { path: string, slug: SLUG, size: number }[]) {
+    for (let i = 0; i < list.length; i++) {
+      const { slug, size, path } = list[i];
       const workers: Worker[] = [];
-      for (let n = 0; n < 2; n++) {
-        const worker = new Worker(workerPath);
-        worker.postMessage({
-          type: 'INIT',
-          slug,
-          sharedBuffer: GameRobots[slug]?.sharedBuffer
-        });
+      for (let j = 0; j < size; j++) {
+        const worker = new Worker(path);
+        worker.postMessage({ slug: slug, event: 'INIT', data: { sharedBuffer: GameRobots[slug]?.sharedBuffer } })
+        workers.push(worker);
       }
       this.workersMap.set(slug, workers);
       this.indexMap.set(slug, 0);
     }
   }
   // 派发worker去计算
-  async dispatch(slug: string, input: { event: string; data: any }): Promise<AIDecision> {
+  async dispatch(slug: string, input: { event: string; data: any }): Promise<any> {
     const group = this.workersMap.get(slug);
     if (!group) {
       throw new Error(`No Workers for group ${slug}`)

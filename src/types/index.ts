@@ -37,3 +37,13 @@ export interface IPlayer {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface IBotInfo {
+  role: string;
+  slug: string;
+  ticket: string;
+  room_id: string;
+  match_id: string;
+  player_id: string;
+  serverUrl: string;
+}

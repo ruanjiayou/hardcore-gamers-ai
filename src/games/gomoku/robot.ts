@@ -1,13 +1,23 @@
 import { Zobrist } from "./utils/Zobrist";
 import type { WorkerPool } from "../../core/WorkerPool";
-import { BotInstance, type BotConfig } from "../../core/BotFatory";
+import { BotInstance } from "../../core/BotFatory";
 import { cloneDeep, pick } from 'lodash'
-import type { IPlayer } from "../../types";
+import type { IBotInfo, IPlayer } from "../../types";
+import { io, Socket } from "socket.io-client";
+
+enum GomokuRole {
+  black = 'black',
+  white = 'white',
+};
+enum GomokuRoleNumber {
+  black = 1,
+  white = 2,
+}
 
 interface GomokuState {
   board: number[][];
   hash: bigint;
-  turn: 'black' | 'white';
+  turn: GomokuRole;
 }
 export const SendoutEvent = {
   KickPlayer: 'room:kick-player',
@@ -53,16 +63,28 @@ export const ReceiveEvent = {
 } as const;
 
 export default class GomokuBotInstance extends BotInstance {
+  override socket: Socket;
+  override config: IBotInfo;
+  override workerPool: WorkerPool;
+
   readonly slug = 'gomoku';
-  game_id: string = '';
   state: GomokuState;
   // 1M entries
   static sharedBuffer = new SharedArrayBuffer(1024 * 1024 * 16)
-  constructor(data: BotConfig, workerPool: WorkerPool) {
-    super(data, workerPool);
+  constructor(data: IBotInfo, workerPool: WorkerPool) {
+    super();
+    this.config = data;
+    this.workerPool = workerPool;
+    this.socket = io(this.config.serverUrl, {
+      query: { ticket: this.config.ticket },
+      autoConnect: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 3000,
+    });
+
     // 自定义
     const board = Array(15).fill(0).map(() => Array(15).fill(0));
-    const turn = 'black';
+    const turn = GomokuRole.black;
     this.state = {
       board,
       hash: 0n,
@@ -77,7 +99,6 @@ export default class GomokuBotInstance extends BotInstance {
       this.socket.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id }, (success: boolean, player: IPlayer) => {
         console.log(`玩家 ${this.config.player_id} 加入房间`, success)
         if (success) {
-          this.game_id = player.game_id;
           // 只准备一次,防重连时重复发送
           if (player.state === 'online') {
             this.socket.emit(SendoutEvent.PlayerReady, { room_id: this.config.room_id, player_id: this.config.player_id, ready: true }, (ok: boolean) => {
@@ -93,6 +114,7 @@ export default class GomokuBotInstance extends BotInstance {
       });
     });
     this.socket.on(ReceiveEvent.GameStart, async (data: { room_id: string, match_id: string }) => {
+      this.config.match_id = data.match_id;
       // 游戏开始,先获取数据
       this.getMatchState(data.match_id);
     })
@@ -102,7 +124,7 @@ export default class GomokuBotInstance extends BotInstance {
       // this.state.turn = 'balck';不变
       this.state.hash = 0n;
     })
-    this.socket.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: 'black' | 'white' } }) => {
+    this.socket.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: GomokuRole } }) => {
       console.log(`player action: ${data.curr_turn} ${data.to.x},${data.to.y}`)
       // 同步数据
       this.makeMove(data.to.x, data.to.y, data.to.role)
@@ -124,8 +146,8 @@ export default class GomokuBotInstance extends BotInstance {
         player_id: this.config.player_id,
         to: { x: decision.x, y: decision.y, role: this.config.role },
       },
-      (success: boolean) => {
-        console.log('automate 成功', success)
+      (result: { success: boolean; message: string }) => {
+        console.log('automate ', result.success, result.message)
       }
     )
   }
@@ -137,19 +159,19 @@ export default class GomokuBotInstance extends BotInstance {
     console.log(`获取游戏对战数据`)
     this.socket.emit(
       SendoutEvent.GetMatchState,
-      { game_id: this.game_id, match_id: match_id },
-      (data: { board: { [key: string]: string }, players: { _id: string, role: string }[], curr_turn: string }) => {
+      { game_slug: this.slug, match_id: match_id },
+      (data: { board: { [key: string]: string }, players: { _id: string, role: string }[], curr_turn: string, match_id: string }) => {
         Object.entries(data.board).forEach(kv => {
           const [key, role] = kv;
           const [x, y] = key.split('|').map(v => parseInt(v));
-          this.state.board[x][y] = role === 'black' ? 1 : 2;
+          this.state.board[x][y] = GomokuRoleNumber[role as GomokuRole]
         })
         console.log(data)
         const player = data.players.find(p => p._id === this.config.player_id);
         if (player) {
           this.config.role = player.role;
         }
-        this.state.turn = data.curr_turn === this.config.player_id ? this.config.role as 'black' | 'white' : (this.config.role === 'black' ? 'white' : 'black');
+        this.state.turn = data.curr_turn === this.config.player_id ? this.config.role as GomokuRole : (this.config.role === GomokuRole.black ? GomokuRole.white : GomokuRole.black);
         this.state.hash = Zobrist.calculate(this.state.board, this.state.turn);
         // 若机器人先手触发 AI
         if (this.state.turn === this.config.role) {
@@ -157,10 +179,10 @@ export default class GomokuBotInstance extends BotInstance {
         }
       })
   }
-  makeMove(x: number, y: number, role: 'black' | 'white') {
-    this.state.board[x][y] = role === 'black' ? 1 : 2;
+  makeMove(x: number, y: number, role: GomokuRole) {
+    this.state.board[x][y] = GomokuRoleNumber[role];
     this.state.hash = Zobrist.update(this.state.hash, role, x, y);
-    this.state.turn = role === 'black' ? 'white' : 'black';
+    this.state.turn = role === GomokuRole.black ? GomokuRole.white : GomokuRole.black;
   }
 
   // 获取快照
@@ -169,57 +191,3 @@ export default class GomokuBotInstance extends BotInstance {
   }
 
 }
-
-// class GomokuRobot extends GameRobot {
-//   readonly slug = 'gomoku';
-//   state: GomokuState;
-//   // 1M entries
-//   static override sharedBuffer = new SharedArrayBuffer(1024 * 1024 * 16)
-//   constructor() {
-//     super()
-//     const board = Array(15).fill(0).map(() => Array(15).fill(0));
-//     const turn = 1;
-//     this.state = {
-//       board,
-//       hash: Zobrist.calculate(board, turn),
-//       turn,
-//       isGameOver: false
-//     }
-//   }
-//   // 处理消息
-//   override async react(message: GameMessage) {
-//     if (message.event === 'room:player-action') {
-//       return message;
-//     } else if (message.event === 'room:room-ready') {
-
-//     }
-//     return;
-//   }
-
-//   updateState(event: string, data: any) {
-//     if (event === "MOVE") {
-//       const { r, c, p } = data; // 行、列、玩家
-//       // @ts-ignore
-//       this.state.board[r][c] = p;
-//       // 增量更新 Hash，性能极高
-//       this.state.hash = Zobrist.update(this.state.hash, p, r, c);
-//       this.state.turn = p === 1 ? 2 : 1;
-//     }
-//   }
-
-//   makeMove(x: number, y: number, role: number) {
-//     this.state.board[x][y] = role;
-//     this.state.hash = Zobrist.update(this.state.hash, role, x, y);
-//     this.state.turn = role === 1 ? 2 : 1;
-//   }
-
-//   // 获取快照
-//   override getSnapShot() {
-//     return {
-//       hash: this.state.hash,
-//       turn: this.state.turn,
-//       board: JSON.parse(JSON.stringify(this.state.board))
-//     };
-//   }
-
-// }

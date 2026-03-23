@@ -1,36 +1,21 @@
 import { io, Socket } from "socket.io-client";
 import type { WorkerPool } from "../core/WorkerPool";
 import GameRobots from "../games/robots";
+import type { IBotInfo } from "../types";
 
 type SLUG = keyof typeof GameRobots
-export type BotConfig = {
-  role: string;
-  room_id: string;
-  player_id: string;
-  match_id: string;
-  serverUrl: string;
-  tokens: { access_token: string };
-}
-// BotInstance.ts (基类)
+
 export abstract class BotInstance {
-  socket: Socket;
-  config: BotConfig;
-  workerPool: WorkerPool
-  constructor(config: BotConfig, workerPool: WorkerPool) {
-    this.config = config;
-    this.workerPool = workerPool;
-    this.socket = io(config.serverUrl, {
-      query: { token: config.tokens.access_token },
-      autoConnect: false
-    });
-  }
-  // 抽象方法：强制子类实现各自的游戏事件监听
+  abstract socket: Socket;
+  abstract config: IBotInfo;
+  abstract workerPool: WorkerPool
+  // 核心流程(reply)：(socket)收到消息 -> reply回复处理方式.直接发或派发计算(postMessage) -> 异步返回(resolve) -> (socket)发送消息
   abstract initial(): void;
   abstract destroy(): void;
 }
 
 export default class BotFactory {
-  static create(slug: SLUG, config: any, workerPool: WorkerPool): BotInstance {
+  static create(slug: SLUG, config: IBotInfo, workerPool: WorkerPool): BotInstance {
     const GameRobot = GameRobots[slug];
     if (!GameRobot) {
       throw new Error('Unsupported game type')

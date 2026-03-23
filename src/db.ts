@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import type { IBotInfo } from './types';
 
 // 创建或打开数据库
 const db = new Database('robots.sqlite');
@@ -12,30 +13,23 @@ db.run(`
     role NUMBER,
     match_id STRING NOT NULL,
     serverUrl STRING NOT NULL,
-    tokens TEXT NOT NULL
+    ticket TEXT NOT NULL
   )
 `);
 
-type Data = {
-  player_id: string,
-  slug: string,
-  serverUrl: string,
-  tokens: string,
-  room_id: string,
-}
 interface RobotInsert {
-  $player_id: string;
   $slug: string;
   $role: number;
-  $serverUrl: string;
-  $match_id: string;
-  $tokens: string;
+  $ticket: string;
   $room_id: string;
+  $match_id: string;
+  $player_id: string;
+  $serverUrl: string;
 }
 
-const getRobots = () => db.prepare<Data, any>('select * from robots').all()
+const getRobots = () => db.prepare<IBotInfo, any>('select * from robots').all()
 const createRobot = (robot: RobotInsert) => db.prepare<RobotInsert, any>(
-  'INSERT INTO robots (player_id, slug, serverUrl, room_id, tokens, match_id, role) VALUES ($player_id, $slug, $serverUrl, $room_id, $tokens, $match_id, $role)'
+  'INSERT INTO robots (player_id, slug, serverUrl, room_id, ticket, match_id, role) VALUES ($player_id, $slug, $serverUrl, $room_id, $ticket, $match_id, $role)'
 ).run(robot);
 const removeRobot = (player_id: string) => db.prepare(`DELETE FROM robots WHERE player_id = $player_id`).run({ $player_id: player_id })
 

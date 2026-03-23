@@ -4,7 +4,7 @@ import db from "./db";
 const manager = new BotManager();
 db.getRobots().forEach(robot => {
   console.log(`玩家 ${robot.player_id} 重新连接`, robot)
-  manager.addBot({ ...robot, tokens: JSON.parse(robot.tokens) })
+  manager.addBot(robot)
 })
 // 使用 Bun.serve 创建一个高性能控制接口
 
@@ -25,7 +25,7 @@ const server = Bun.serve({
           $role: data.role || 1,
           $match_id: data.match_id || '',
           $room_id: data.room_id,
-          $tokens: JSON.stringify(data.tokens)
+          $ticket: data.ticket
         }))
         return new Response(JSON.stringify({ code: 0 }), {
           headers: { "Content-Type": "application/json" }

@@ -1,11 +1,11 @@
 import { Zobrist } from "./utils/Zobrist";
 import type { WorkerPool } from "../../core/WorkerPool";
 import { BotInstance } from "../../core/BotFatory";
-import { cloneDeep, pick } from 'lodash'
-import type { IBotInfo, IPlayer } from "../../types";
+import { cloneDeep } from 'lodash'
+import type { IBotInfo, IPlayer } from "../../@types";
 import { io, Socket } from "socket.io-client";
 
-enum GomokuRole {
+export enum GomokuRole {
   black = 'black',
   white = 'white',
 };
@@ -63,7 +63,7 @@ export const ReceiveEvent = {
 } as const;
 
 export default class GomokuBotInstance extends BotInstance {
-  override socket: Socket;
+  override socket?: Socket;
   override config: IBotInfo;
   override workerPool: WorkerPool;
 
@@ -75,12 +75,6 @@ export default class GomokuBotInstance extends BotInstance {
     super();
     this.config = data;
     this.workerPool = workerPool;
-    this.socket = io(this.config.serverUrl, {
-      query: { ticket: this.config.ticket },
-      autoConnect: true,
-      reconnectionAttempts: 3,
-      reconnectionDelay: 3000,
-    });
 
     // 自定义
     const board = Array(15).fill(0).map(() => Array(15).fill(0));
@@ -93,19 +87,25 @@ export default class GomokuBotInstance extends BotInstance {
     this.initial();
   }
   override initial(): void {
+    this.socket = io(this.config.serverUrl, {
+      query: { ticket: this.config.ticket },
+      autoConnect: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 3000,
+    });
     this.socket.connect();
     this.socket.once('connect', () => {
       // 添加机器人后自动加入房间
-      this.socket.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id }, (success: boolean, player: IPlayer) => {
+      this.socket?.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id }, (success: boolean, player: IPlayer) => {
         console.log(`玩家 ${this.config.player_id} 加入房间`, success)
         if (success) {
           // 只准备一次,防重连时重复发送
           if (player.state === 'online') {
-            this.socket.emit(SendoutEvent.PlayerReady, { room_id: this.config.room_id, player_id: this.config.player_id, ready: true }, (ok: boolean) => {
+            this.socket?.emit(SendoutEvent.PlayerReady, { room_id: this.config.room_id, player_id: this.config.player_id, ready: true }, (ok: boolean) => {
               console.log(`玩家 ${this.config.player_id} 准备 ${ok}`)
             })
           } else if (player.state === 'inroom') {
-            this.socket.emit(SendoutEvent.GetRoomDetail, { room_id: this.config.room_id }, (data: any) => {
+            this.socket?.emit(SendoutEvent.GetRoomDetail, { room_id: this.config.room_id }, (data: any) => {
               this.config.match_id = data.match_id
               this.getMatchState(data.match_id);
             })
@@ -139,7 +139,7 @@ export default class GomokuBotInstance extends BotInstance {
       event: 'compute',
       data: this.getSnapShot(),
     })
-    this.socket.emit(
+    this.socket?.emit(
       ReceiveEvent.PlayerAction,
       this.config.match_id,
       {
@@ -152,12 +152,12 @@ export default class GomokuBotInstance extends BotInstance {
     )
   }
   override destroy(): void {
-    this.socket.disconnect();
+    this.socket?.disconnect();
   }
 
   getMatchState(match_id: string) {
     console.log(`获取游戏对战数据`)
-    this.socket.emit(
+    this.socket?.emit(
       SendoutEvent.GetMatchState,
       { game_slug: this.slug, match_id: match_id },
       (data: { board: { [key: string]: string }, players: { _id: string, role: string }[], curr_turn: string, match_id: string }) => {

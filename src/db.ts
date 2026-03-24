@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import type { IBotInfo } from './types';
+import type { IBotInfo } from './@types';
 
 // 创建或打开数据库
 const db = new Database('robots.sqlite');

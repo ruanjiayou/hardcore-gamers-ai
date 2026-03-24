@@ -1,6 +1,6 @@
 import { WorkerPool } from "./WorkerPool";
 import BotFactory, { BotInstance } from "./BotFatory.ts";
-import type { IBotInfo } from "../types/index.ts";
+import type { IBotInfo } from "../@types/index.ts";
 
 export class BotManager {
   private robots = new Map<string, BotInstance>();
@@ -8,7 +8,7 @@ export class BotManager {
 
   constructor() {
     this.workerPool = new WorkerPool([
-      { slug: 'gomoku', size: 2, path: new URL("../games/gomoku/worker.ts", import.meta.url).href },
+      { slug: 'gomoku', size: 2, path: new URL("../workers/gomoku.ts", import.meta.url).href },
     ]);
   }
 
@@ -19,7 +19,7 @@ export class BotManager {
   }
 
   removeBot(id: string) {
-    this.robots.get(id)?.socket.disconnect();
+    this.robots.get(id)?.socket?.disconnect();
     this.robots.delete(id);
   }
 }

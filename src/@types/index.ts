@@ -1,21 +1,3 @@
-export interface GameMessage {
-  event: string;
-  data: any;
-}
-
-export interface AIInput {
-  slug: string;
-  type: 'message' | 'compute';
-  payload: {
-    event: string;
-    data: any
-  };
-}
-
-export interface AIDecision {
-  event: string;
-  data: any;
-}
 
 export interface IPlayer {
   _id: string;

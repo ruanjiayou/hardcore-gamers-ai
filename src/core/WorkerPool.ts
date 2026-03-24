@@ -1,4 +1,3 @@
-import type { AIDecision, AIInput } from "../types";
 import GameRobots from "../games/robots";
 
 type SLUG = keyof typeof GameRobots

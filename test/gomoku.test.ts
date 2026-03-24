@@ -1,26 +1,34 @@
-import GomokuAI from '../src/games/gomoku/ai'
-import GomokuRobot from '../src/games/gomoku/robot';
-import { TranspositionTable } from '../src/games/gomoku/TranspositionTable';
-import { Zobrist } from '../src/games/gomoku/Zobrist';
+import GomokuAI from '../src/workers/gomoku'
+import { WorkerPool } from '../src/core/WorkerPool';
+import GomokuRobot, { GomokuRole } from '../src/games/gomoku/robot';
+import { TranspositionTable } from '../src/games/gomoku/utils/TranspositionTable';
 
 const sharedBuffer = new SharedArrayBuffer(1024 * 1024 * 16);
 const table = new TranspositionTable(sharedBuffer);
 
 
-const Robot = new GomokuRobot();
+const Robot = new GomokuRobot({
+  slug: 'gomoku',
+  role: 'black',
+  ticket: '',
+  room_id: '',
+  match_id: '',
+  player_id: 'test',
+  serverUrl: '',
+}, new WorkerPool([]));
 
 function automate(debug: boolean = false) {
   const AI = new GomokuAI(table);
   AI.debug = debug;
   const move = AI.getBestMove(Robot.getSnapShot())
   if (move) {
-    console.log(`${move.x},${move.y}`, Robot.state.turn === 1 ? 'B' : 'W');
+    console.log(`${move.x},${move.y}`, Robot.state.turn === 'black' ? 'B' : 'W');
     Robot.makeMove(move.x, move.y, Robot.state.turn);
   }
 }
-function recordMove(x: number, y: number, p: number): [number, number, number] {
+function recordMove(x: number, y: number, p: number): [number, number, GomokuRole] {
   console.log(`${x},${y} ${p === 1 ? 'B' : 'W'}`)
-  return [x, y, p]
+  return [x, y, p === 1 ? GomokuRole.black : GomokuRole.white]
 }
 function show(board: number[][]) {
   // 可视化棋盘
@@ -35,22 +43,6 @@ function show(board: number[][]) {
   }
   console.log(xy.reverse().map(arr => arr.join('|')).join('\n') + '\n' + '0123456789ABCDE'.split('').join('|'))
 }
-
-// for (let i = 0; i < 7; i++) {
-//   console.clear();
-//   automate(i === 6 ? true : false);
-//   show(Robot.state.state.board);
-//   await new Promise((resolve) => setTimeout(() => resolve(true), 1000));
-// }
-
-// console.log(new GomokuAI(table).scoreLine([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,], 1));
-// console.log(new GomokuAI(table).scoreLine([0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0,], 1));
-// console.log(new GomokuAI(table).scoreLine([0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0,], 1));
-// console.log(new GomokuAI(table).scoreLine([0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0,], 1));
-// console.log(new GomokuAI(table).scoreLine([0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,], 1));
-// console.log(new GomokuAI(table).scoreLine([0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 0,], 1));
-// console.log(new GomokuAI(table).scoreLine([0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0,], 1));
-// console.log(new GomokuAI(table).scoreLine([0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0,], 1));
 
 const board = Array(15).fill(0).map(() => Array(15).fill(0));
 const AI = new GomokuAI(table)

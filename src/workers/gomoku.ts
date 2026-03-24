@@ -1,7 +1,7 @@
-// @ts-ignore
+import { TranspositionTable, TTFlag } from "../games/gomoku/utils/TranspositionTable";
+import { Zobrist } from "../games/gomoku/utils/Zobrist";
 
-import { TranspositionTable, TTFlag } from "./utils/TranspositionTable";
-import { Zobrist } from "./utils/Zobrist";
+declare var self: Worker;
 
 enum PLAYER_ROLE {
   black = 1, // 黑棋（通常AI执黑，可根据需要调整）
@@ -428,4 +428,22 @@ export default class GomokuAI {
   opponent(player: number) {
     return player === PLAYER_ROLE.black ? PLAYER_ROLE.white : PLAYER_ROLE.black;
   }
+}
+
+// worker部分逻辑
+let table: TranspositionTable | null = null;
+const isWorker = typeof (globalThis as any).postMessage === 'function' && !(globalThis as any).document;
+if (isWorker) {
+  // 一个 worker 只处理一种游戏
+  self.onmessage = async (e: MessageEvent) => {
+    const { taskId, event, data } = e.data;
+
+    if (event === 'INIT') {
+      table = new TranspositionTable(data.sharedBuffer);
+      return;
+    }
+    let decision = new GomokuAI(table as TranspositionTable).getBestMove(data);
+
+    self.postMessage({ taskId, decision });
+  };
 }

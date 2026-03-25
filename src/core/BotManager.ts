@@ -15,6 +15,7 @@ export class BotManager {
   addBot(data: IBotInfo) {
     const bot = BotFactory.create(data.slug as any, data, this.workerPool)
     this.robots.set(data.player_id, bot);
+    bot.initial()
     console.log(`[Manager] Bot ${data.player_id} joined ${data.slug}`);
   }
 

@@ -5,19 +5,19 @@ import { cloneDeep } from 'lodash'
 import type { IBotInfo, IPlayer } from "../../@types";
 import { io, Socket } from "socket.io-client";
 
-export enum GomokuRole {
+export enum XiangqiRole {
   black = 'black',
-  white = 'white',
+  red = 'red',
 };
-enum GomokuRoleNumber {
+enum XiangqiRoleNumber {
   black = 1,
-  white = 2,
+  red = 2,
 }
 
-interface GomokuState {
+interface XiangqiState {
   board: number[][];
   hash: bigint;
-  turn: GomokuRole;
+  turn: XiangqiRole;
 }
 export const SendoutEvent = {
   KickPlayer: 'room:kick-player',
@@ -62,27 +62,29 @@ export const ReceiveEvent = {
 
 } as const;
 
-export default class GomokuBotInstance extends BotInstance {
+export default class XiangqiBotInstance extends BotInstance {
   override socket?: Socket;
   override config: IBotInfo;
   override workerPool: WorkerPool;
 
-  readonly slug = 'gomoku';
-  state: GomokuState;
-  static sharedBuffer: SharedArrayBuffer = ZobristTT.initSharedBuffer();
+  readonly slug = 'xiagnqi';
+  state: XiangqiState;
+  // 1M entries
+  static sharedBuffer = new SharedArrayBuffer(1024 * 1024 * 16)
   constructor(data: IBotInfo, workerPool: WorkerPool) {
     super();
     this.config = data;
     this.workerPool = workerPool;
-    ZobristTT.mount(GomokuBotInstance.sharedBuffer)
+
     // 自定义
     const board = Array(15).fill(0).map(() => Array(15).fill(0));
-    const turn = GomokuRole.black;
+    const turn = XiangqiRole.black;
     this.state = {
       board,
       hash: 0n,
       turn,
     }
+    this.initial();
   }
   override initial(): void {
     this.socket = io(this.config.serverUrl, {
@@ -122,7 +124,7 @@ export default class GomokuBotInstance extends BotInstance {
       // this.state.turn = 'balck';不变
       this.state.hash = 0n;
     })
-    this.socket.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: GomokuRole } }) => {
+    this.socket.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: XiangqiRole } }) => {
       console.log(`player action: ${data.curr_turn} ${data.to.x},${data.to.y}`)
       if (!this.isLegalMove(data.to.x, data.to.y)) {
         // 同步数据
@@ -135,10 +137,6 @@ export default class GomokuBotInstance extends BotInstance {
     })
   }
   async automate() {
-    if (this.state.turn !== this.config.role) {
-      console.log('非法回合')
-      return;
-    }
     const decision = await this.workerPool.dispatch(this.slug, {
       event: 'compute',
       data: this.getSnapShot(),
@@ -168,14 +166,15 @@ export default class GomokuBotInstance extends BotInstance {
         Object.entries(data.board).forEach(kv => {
           const [key, role] = kv;
           const [x, y] = key.split('|').map(v => parseInt(v));
-          this.state.board[x][y] = GomokuRoleNumber[role as GomokuRole]
+          this.state.board[x][y] = XiangqiRoleNumber[role as XiangqiRole]
         })
+        console.log(data)
         const player = data.players.find(p => p._id === this.config.player_id);
         if (player) {
           this.config.role = player.role;
         }
-        this.state.turn = data.curr_turn === this.config.player_id ? this.config.role as GomokuRole : (this.config.role === GomokuRole.black ? GomokuRole.white : GomokuRole.black);
-        this.state.hash = ZobristTT.calculate(this.state.board.flat(), this.state.turn === GomokuRole.black ? 1 : 2);
+        this.state.turn = data.curr_turn === this.config.player_id ? this.config.role as XiangqiRole : (this.config.role === XiangqiRole.black ? XiangqiRole.red : XiangqiRole.black);
+        this.state.hash = ZobristTT.calculate(this.state.board.flat(), XiangqiRoleNumber[this.state.turn]);
         // 若机器人先手触发 AI
         if (this.state.turn === this.config.role) {
           this.automate();
@@ -185,15 +184,10 @@ export default class GomokuBotInstance extends BotInstance {
   isLegalMove(x: number, y: number) {
     return this.state.board[x][y] ? true : false;
   }
-  makeMove(x: number, y: number, role: GomokuRole): boolean {
-    if (this.state.board[x][y]) {
-      console.log('非法落子')
-      return false;
-    }
-    this.state.board[x][y] = GomokuRoleNumber[role];
-    this.state.hash = ZobristTT.update(this.state.hash, role === GomokuRole.black ? 1 : 2, { x, y });
-    this.state.turn = role === GomokuRole.black ? GomokuRole.white : GomokuRole.black;
-    return true;
+  makeMove(x: number, y: number, role: XiangqiRole) {
+    this.state.board[x][y] = XiangqiRoleNumber[role];
+    this.state.hash = ZobristTT.update(this.state.hash, XiangqiRoleNumber[role], { x, y });
+    this.state.turn = role === XiangqiRole.black ? XiangqiRole.red : XiangqiRole.black;
   }
   // 获取快照
   getSnapShot() {

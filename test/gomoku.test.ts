@@ -1,11 +1,6 @@
 import GomokuAI from '../src/workers/gomoku'
 import { WorkerPool } from '../src/core/WorkerPool';
 import GomokuRobot, { GomokuRole } from '../src/games/gomoku/robot';
-import { TranspositionTable } from '../src/games/gomoku/utils/TranspositionTable';
-
-const sharedBuffer = new SharedArrayBuffer(1024 * 1024 * 16);
-const table = new TranspositionTable(sharedBuffer);
-
 
 const Robot = new GomokuRobot({
   slug: 'gomoku',
@@ -16,9 +11,15 @@ const Robot = new GomokuRobot({
   player_id: 'test',
   serverUrl: '',
 }, new WorkerPool([]));
-
+async function sleep(n: number) {
+  return await new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(true);
+    }, n)
+  })
+}
 function automate(debug: boolean = false) {
-  const AI = new GomokuAI(table);
+  const AI = new GomokuAI();
   AI.debug = debug;
   const move = AI.getBestMove(Robot.getSnapShot())
   if (move) {
@@ -31,6 +32,7 @@ function recordMove(x: number, y: number, p: number): [number, number, GomokuRol
   return [x, y, p === 1 ? GomokuRole.black : GomokuRole.white]
 }
 function show(board: number[][]) {
+  console.clear();
   // 可视化棋盘
   const xy = Array(15).fill([]).map(() => Array(15).fill('-'));
   for (let x = 0; x < 15; x++) {
@@ -41,18 +43,25 @@ function show(board: number[][]) {
       }
     }
   }
-  console.log(xy.reverse().map(arr => arr.join('|')).join('\n') + '\n' + '0123456789ABCDE'.split('').join('|'))
+  console.log(xy.reverse().map((arr, i) => (14 - i).toString(16).toUpperCase() + '|' + arr.join('|') + '|').join('\n') + '\n' + ' 0123456789ABCDE'.split('').join('|') + '|')
 }
 
-const board = Array(15).fill(0).map(() => Array(15).fill(0));
-const AI = new GomokuAI(table)
+for (let i = 0; i < 20; i++) {
+  await sleep(1500)
+  automate();
+  show(Robot.state.board)
+}
+
 // console.log(AI.evaluate(board, 1), AI.evaluate(board, 2));
-Robot.makeMove(...recordMove(7, 7, 1))
-automate(); // 6,6
-Robot.makeMove(...recordMove(7, 6, 1))
-automate(); // 7,5 => 8,7
-Robot.makeMove(...recordMove(6, 7, 1))
-automate(); // 5,7 => 5,8
+// if (Robot.makeMove(...recordMove(7, 7, 1))) {
+//   automate(); // 6,6
+// }
+// if (Robot.makeMove(...recordMove(7, 6, 1))) {
+//   automate(); // 7,5 => 8,7
+// }
+// if (Robot.makeMove(...recordMove(6, 7, 1))) {
+//   automate(); // 5,7 => 5,8
+// }
 
 // 测试绝杀
 // Robot.makeMove(...recordMove(7, 8, 1))
@@ -60,14 +69,24 @@ automate(); // 5,7 => 5,8
 // Robot.makeMove(...recordMove(7, 9, 1)) // 不能下 4,8 覆盖了, 
 // automate(); // AI 应该绝杀
 
-Robot.makeMove(...recordMove(4, 8, 1))
-automate();
-Robot.makeMove(...recordMove(5, 6, 1))
-automate();
-Robot.makeMove(...recordMove(7, 8, 1))
-automate();
-Robot.makeMove(...recordMove(9, 3, 1))
-automate();
+// if (Robot.makeMove(...recordMove(4, 8, 1))) {
+//   automate();
+// }
+// if (Robot.makeMove(...recordMove(9, 3, 1))) {
+//   automate();
+// }
+// if (Robot.makeMove(...recordMove(5, 5, 1))) {
+//   automate();
+// }
+// if (Robot.makeMove(...recordMove(8, 6, 1))) {
+//   automate();
+// }
+// if (Robot.makeMove(...recordMove(8, 1, 1))) {
+//   automate();
+// }
+// if (Robot.makeMove(...recordMove(6, 2, 1))) {
+//   automate();
+// }
 
 // B 4,8 console.log(AI.getBestMove({ board: JSON.parse(JSON.stringify(Robot.state.board)), turn: 1, hash: Zobrist.calculate(Robot.state.board, 1) }))
 

@@ -1,11 +1,14 @@
-import { TranspositionTable, TTFlag } from "../games/gomoku/utils/TranspositionTable";
-import { Zobrist } from "../games/gomoku/utils/Zobrist";
+import ZobristTT, { TTFlag } from "../games/gomoku/ZobristTT";
 
 declare var self: Worker;
 
 enum PLAYER_ROLE {
   black = 1, // 黑棋（通常AI执黑，可根据需要调整）
   white = 2, // 白棋
+}
+type Point = {
+  x: number,
+  y: number,
 }
 // 五子棋AI类
 export default class GomokuAI {
@@ -22,7 +25,6 @@ export default class GomokuAI {
     LIVE_TWO: 100,     // 活二
     SLEEP_TWO: 10,     // 眠二
   };
-  transTable: TranspositionTable;
   // 方向向量：水平、垂直、对角线、反对角线
   dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
   private patterns: Map<number, { regex: RegExp, score: number }[]> = new Map();
@@ -69,13 +71,13 @@ export default class GomokuAI {
     })));
   }
 
-  constructor(table: TranspositionTable, width: number = 15, height: number = 15) {
+  constructor(width: number = 15, height: number = 15) {
     this.width = width;
     this.height = height;
 
     this.preparePatterns(1);
     this.preparePatterns(2);
-    this.transTable = table; // 置换表 { hash: { depth, score, flag, bestMove } }
+    // 置换表 { hash: { depth, score, flag, bestMove } }
   }
   encodeMove(p: { x: number, y: number }): number {
     // 简单校验，防止越界
@@ -90,7 +92,7 @@ export default class GomokuAI {
   }
   // 公开接口：传入当前棋盘（二维数组），当前要走的玩家（1或2），搜索深度，返回最佳落子 { x, y }
   getBestMove(payload: { board: number[][], turn: 'black' | 'white', hash: bigint, depth?: number }) {
-    const { board, turn, hash, depth = 3 } = payload;
+    const { board, turn, hash, depth = 4 } = payload;
     // 初始化走法列表
     let moves = this.generateMoves(board);
     if (!moves[0]) return null; // 棋盘已满
@@ -109,7 +111,7 @@ export default class GomokuAI {
           board[move.x][move.y] = this.empty;
           return move;
         }
-        const next_hash = Zobrist.update(hash, turn, move.x, move.y)
+        const next_hash = ZobristTT.update(hash, PLAYER_ROLE[turn], move)
         let score = -this.alphaBeta(board, this.opponent(PLAYER_ROLE[turn]), d - 1, -beta, -alpha, next_hash);
         board[move.x][move.y] = this.empty; // 回溯
         if (score > bestScore) {
@@ -126,19 +128,16 @@ export default class GomokuAI {
 
   // α-β递归
   alphaBeta(board: number[][], player: number, depth: number, alpha: number, beta: number, hash: bigint) {
+    if (depth === 0) {
+      return this.evaluate(board, player);
+    }
     // 置换表查询
-    const entry = this.transTable.probe(hash);
+    const entry = ZobristTT.probe(hash);
     if (entry && entry.depth >= depth) {
       if (entry.flag === TTFlag.EXACT) return entry.score;
-      if (entry.flag === TTFlag.ALPHA) alpha = Math.max(alpha, entry.score);
-      if (entry.flag === TTFlag.BETA) beta = Math.min(beta, entry.score);
+      if (entry.flag === TTFlag.ALPHA) beta = Math.max(beta, entry.score);
+      if (entry.flag === TTFlag.BETA) alpha = Math.min(alpha, entry.score);
       if (alpha >= beta) return entry.score;
-    }
-
-    // 深度为0(搜索达到预定深度) 或 直接胜负已分（用快速检测）
-    if (depth === 0) {
-      let score = this.evaluate(board, player); // 评估当前玩家视角
-      return score;
     }
 
     let moves = this.generateMoves(board);
@@ -156,7 +155,7 @@ export default class GomokuAI {
       if (this.isWin(board, move.x, move.y, player)) {
         return this.score.FIVE;
       }
-      const next_hash = Zobrist.update(hash, player === 1 ? 'black' : 'white', move.x, move.y)
+      const next_hash = ZobristTT.update(hash, player, move)
       let score: number = -this.alphaBeta(board, this.opponent(player), depth - 1, -beta, -alpha, next_hash);
       board[move.x][move.y] = this.empty;
       if (score > bestScore) {
@@ -172,10 +171,10 @@ export default class GomokuAI {
 
     // 存入置换表
     let entryFlag = TTFlag.EXACT;
-    if (bestScore <= alpha) entryFlag = TTFlag.BETA;
-    else if (bestScore >= beta) entryFlag = TTFlag.ALPHA;
+    if (bestScore <= alpha) entryFlag = TTFlag.ALPHA;
+    else if (bestScore >= beta) entryFlag = TTFlag.BETA;
 
-    this.transTable.store(hash, bestScore, depth, entryFlag, this.encodeMove(bestMove as { x: number, y: number }))
+    ZobristTT.store(hash, bestScore, depth, entryFlag, ZobristTT.encodeMovement(0, this.encodeMove(bestMove as Point), player, 0, 0))
     return bestScore;
   }
 
@@ -431,7 +430,6 @@ export default class GomokuAI {
 }
 
 // worker部分逻辑
-let table: TranspositionTable | null = null;
 const isWorker = typeof (globalThis as any).postMessage === 'function' && !(globalThis as any).document;
 if (isWorker) {
   // 一个 worker 只处理一种游戏
@@ -439,10 +437,10 @@ if (isWorker) {
     const { taskId, event, data } = e.data;
 
     if (event === 'INIT') {
-      table = new TranspositionTable(data.sharedBuffer);
+      ZobristTT.mount(data.sharedBuffer)
       return;
     }
-    let decision = new GomokuAI(table as TranspositionTable).getBestMove(data);
+    let decision = new GomokuAI().getBestMove(data);
 
     self.postMessage({ taskId, decision });
   };

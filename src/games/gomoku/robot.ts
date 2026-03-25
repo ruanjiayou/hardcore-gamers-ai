@@ -94,7 +94,7 @@ export default class GomokuBotInstance extends BotInstance {
     this.socket.connect();
     this.socket.once('connect', () => {
       // 添加机器人后自动加入房间
-      this.socket?.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id }, (success: boolean, player: IPlayer) => {
+      this.socket?.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id, type: 'player' }, (success: boolean, player: IPlayer) => {
         console.log(`玩家 ${this.config.player_id} 加入房间`, success)
         if (success) {
           // 只准备一次,防重连时重复发送
@@ -139,6 +139,9 @@ export default class GomokuBotInstance extends BotInstance {
       console.log('非法回合')
       return;
     }
+    await new Promise((resolve) => {
+      setTimeout(() => { resolve(true) }, 1500)
+    })
     const decision = await this.workerPool.dispatch(this.slug, {
       event: 'compute',
       data: this.getSnapShot(),
@@ -160,7 +163,7 @@ export default class GomokuBotInstance extends BotInstance {
   }
 
   getMatchState(match_id: string) {
-    console.log(`获取游戏对战数据`)
+    console.log(`获取游戏对战数据`, match_id)
     this.socket?.emit(
       SendoutEvent.GetMatchState,
       { game_slug: this.slug, match_id: match_id },

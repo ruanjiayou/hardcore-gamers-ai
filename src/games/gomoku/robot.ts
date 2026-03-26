@@ -73,11 +73,11 @@ export default class GomokuBotInstance extends BotInstance {
   state: GomokuState;
   static sab: SharedArrayBuffer = sharedBuffer;
   static zobristTT = new ZobristTT({
+    seed: 8888,
     rows: 15,
     cols: 15,
     types: 2,
-    seed: 8888,
-    size: 1 << 20,
+    slots: 1 << 20,
     sab: sharedBuffer,
   });
   constructor(data: IBotInfo, workerPool: WorkerPool) {

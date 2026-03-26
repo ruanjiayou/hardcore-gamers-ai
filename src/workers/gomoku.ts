@@ -75,8 +75,8 @@ export default class GomokuAI {
 
   constructor(zobristTT: ZobristTT) {
     this.zobristTT = zobristTT;
-    this.width = zobristTT.ROWS;
-    this.height = zobristTT.COLS;
+    this.width = zobristTT.rows;
+    this.height = zobristTT.cols;
 
     this.preparePatterns(1);
     this.preparePatterns(2);
@@ -440,7 +440,7 @@ if (isWorker) {
     const { taskId, event, data } = e.data;
 
     if (event === 'INIT') {
-      zobristTT = new ZobristTT(e.data);
+      zobristTT = new ZobristTT(data);
       return;
     }
     let decision = new GomokuAI(zobristTT!).getBestMove(data);

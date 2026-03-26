@@ -27,12 +27,11 @@ export enum TTFlag {
 }
 
 export default class ZobristTT {
-  public ROWS;
-  public COLS;
-  private TYPES;
-  private ZOBRIST_SIZE;
-  private TT_SIZE;
-  private SEED: number;
+  public rows;
+  public cols;
+  public types;
+  public slots;
+  public seed: number;
 
   // sab 分为4部分: zobrist + 换手hash + 置换表 + 取模掩码
   public zobrist!: BigUint64Array;
@@ -40,30 +39,41 @@ export default class ZobristTT {
   public TT_data!: BigUint64Array;
   public TT_mask!: bigint;
 
-  constructor(param: { rows: number, cols: number, types: number, seed: number, size: number, sab: SharedArrayBuffer }) {
-    this.ROWS = param.rows;
-    this.COLS = param.cols;
-    this.TYPES = param.types;
-    this.TT_SIZE = param.size;
-    this.SEED = param.seed;
-    this.ZOBRIST_SIZE = this.ROWS * this.COLS * this.TYPES + 1;
+  constructor(param: { rows: number, cols: number, types: number, seed: number, slots: number, sab: SharedArrayBuffer }) {
+    this.seed = param.seed;
+    this.rows = param.rows;
+    this.cols = param.cols;
+    this.types = param.types;
+    this.slots = param.slots;
 
-    const rand = mulberry32(this.SEED)
+    const zobrist_size = this.rows * this.cols * this.types + 1;
+
+    const rand = mulberry32(this.seed)
     // 挂载内存
     const k = BigUint64Array.BYTES_PER_ELEMENT;
     // 棋子随机数表
-    this.zobrist = new BigUint64Array(param.sab, 0, this.ZOBRIST_SIZE - 1)
+    this.zobrist = new BigUint64Array(param.sab, 0, zobrist_size - 1)
     // 交换回合hash
-    this.TS_hash = new BigUint64Array(param.sab, k * (this.ZOBRIST_SIZE - 1), 1)[0];
+    this.TS_hash = new BigUint64Array(param.sab, k * (zobrist_size - 1), 1)[0];
     // 初始化随机数
-    const view = new BigUint64Array(param.sab, 0, this.ZOBRIST_SIZE);
-    for (let i = 0; i < this.ZOBRIST_SIZE; i++) {
+    const view = new BigUint64Array(param.sab, 0, zobrist_size);
+    for (let i = 0; i < zobrist_size; i++) {
       view[i] = next64(rand)
     }
     param.sab.byteLength
     // 置换表
-    this.TT_data = new BigUint64Array(param.sab, k * this.ZOBRIST_SIZE);
-    this.TT_mask = BigInt(this.TT_SIZE - 1);
+    this.TT_data = new BigUint64Array(param.sab, k * zobrist_size);
+    this.TT_mask = BigInt(this.slots - 1);
+  }
+
+  getConfig() {
+    return {
+      seed: this.seed,
+      rows: this.rows,
+      cols: this.cols,
+      types: this.types,
+      slots: this.slots,
+    }
   }
 
   /**
@@ -72,10 +82,10 @@ export default class ZobristTT {
   calculate(board: Int32Array | number[], turn: number): bigint {
 
     let hash = 0n;
-    for (let i = 0; i < this.ROWS * this.COLS; i++) {
+    for (let i = 0; i < this.rows * this.cols; i++) {
       const types = board[i];
       if (types !== 0) {
-        hash ^= this.zobrist[i * this.TYPES + types - 1];
+        hash ^= this.zobrist[i * this.types + types - 1];
       }
     }
     if (turn === 2) hash ^= this.TS_hash;
@@ -85,7 +95,7 @@ export default class ZobristTT {
    * 增量更新
    */
   update(hash: bigint, types: number, point: { x: number, y: number }) {
-    hash ^= this.zobrist[point.y * this.ROWS + point.x + types - 1];
+    hash ^= this.zobrist[point.y * this.rows + point.x + types - 1];
     hash ^= this.TS_hash;
     return hash;
   }

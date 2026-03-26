@@ -1,4 +1,4 @@
-import ZobristTT, { TTFlag } from "../games/gomoku/ZobristTT";
+import ZobristTT, { TTFlag } from "../utils/ZobristTT";
 
 declare var self: Worker;
 
@@ -10,8 +10,10 @@ type Point = {
   x: number,
   y: number,
 }
+let zobristTT: ZobristTT | null = null;
 // 五子棋AI类
 export default class GomokuAI {
+  zobristTT: ZobristTT;
   width: number;
   height: number;
   debug: boolean = false;
@@ -71,9 +73,10 @@ export default class GomokuAI {
     })));
   }
 
-  constructor(width: number = 15, height: number = 15) {
-    this.width = width;
-    this.height = height;
+  constructor(zobristTT: ZobristTT) {
+    this.zobristTT = zobristTT;
+    this.width = zobristTT.ROWS;
+    this.height = zobristTT.COLS;
 
     this.preparePatterns(1);
     this.preparePatterns(2);
@@ -111,7 +114,7 @@ export default class GomokuAI {
           board[move.x][move.y] = this.empty;
           return move;
         }
-        const next_hash = ZobristTT.update(hash, PLAYER_ROLE[turn], move)
+        const next_hash = this.zobristTT.update(hash, PLAYER_ROLE[turn], move)
         let score = -this.alphaBeta(board, this.opponent(PLAYER_ROLE[turn]), d - 1, -beta, -alpha, next_hash);
         board[move.x][move.y] = this.empty; // 回溯
         if (score > bestScore) {
@@ -132,7 +135,7 @@ export default class GomokuAI {
       return this.evaluate(board, player);
     }
     // 置换表查询
-    const entry = ZobristTT.probe(hash);
+    const entry = this.zobristTT.probe(hash);
     if (entry && entry.depth >= depth) {
       if (entry.flag === TTFlag.EXACT) return entry.score;
       if (entry.flag === TTFlag.ALPHA) beta = Math.max(beta, entry.score);
@@ -155,7 +158,7 @@ export default class GomokuAI {
       if (this.isWin(board, move.x, move.y, player)) {
         return this.score.FIVE;
       }
-      const next_hash = ZobristTT.update(hash, player, move)
+      const next_hash = this.zobristTT.update(hash, player, move)
       let score: number = -this.alphaBeta(board, this.opponent(player), depth - 1, -beta, -alpha, next_hash);
       board[move.x][move.y] = this.empty;
       if (score > bestScore) {
@@ -174,7 +177,7 @@ export default class GomokuAI {
     if (bestScore <= alpha) entryFlag = TTFlag.ALPHA;
     else if (bestScore >= beta) entryFlag = TTFlag.BETA;
 
-    ZobristTT.store(hash, bestScore, depth, entryFlag, ZobristTT.encodeMovement(0, this.encodeMove(bestMove as Point), player, 0, 0))
+    this.zobristTT.store(hash, bestScore, depth, entryFlag, this.zobristTT.encodeMovement(0, this.encodeMove(bestMove as Point), player, 0, 0))
     return bestScore;
   }
 
@@ -437,10 +440,10 @@ if (isWorker) {
     const { taskId, event, data } = e.data;
 
     if (event === 'INIT') {
-      ZobristTT.mount(data.sharedBuffer)
+      zobristTT = new ZobristTT(e.data);
       return;
     }
-    let decision = new GomokuAI().getBestMove(data);
+    let decision = new GomokuAI(zobristTT!).getBestMove(data);
 
     self.postMessage({ taskId, decision });
   };

@@ -13,7 +13,7 @@ export class WorkerPool {
       const workers: Worker[] = [];
       for (let j = 0; j < size; j++) {
         const worker = new Worker(path);
-        worker.postMessage({ slug: slug, event: 'INIT', data: { sharedBuffer: GameRobots[slug]?.sharedBuffer } })
+        worker.postMessage({ slug: slug, event: 'INIT', data: GameRobots[slug].zobristTT })
         workers.push(worker);
       }
       this.workersMap.set(slug, workers);

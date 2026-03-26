@@ -1,4 +1,4 @@
-import ZobristTT from "./ZobristTT";
+import ZobristTT from "../../utils/ZobristTT";
 import type { WorkerPool } from "../../core/WorkerPool";
 import { BotInstance } from "../../core/BotFatory";
 import { cloneDeep } from 'lodash'
@@ -62,6 +62,8 @@ export const ReceiveEvent = {
 
 } as const;
 
+const sharedBuffer = new SharedArrayBuffer((15 * 15 * 2 + 1 + (1 << 20) * 4) * 8);
+
 export default class GomokuBotInstance extends BotInstance {
   override socket?: Socket;
   override config: IBotInfo;
@@ -69,12 +71,19 @@ export default class GomokuBotInstance extends BotInstance {
 
   readonly slug = 'gomoku';
   state: GomokuState;
-  static sharedBuffer: SharedArrayBuffer = ZobristTT.initSharedBuffer();
+  static sab: SharedArrayBuffer = sharedBuffer;
+  static zobristTT = new ZobristTT({
+    rows: 15,
+    cols: 15,
+    types: 2,
+    seed: 8888,
+    size: 1 << 20,
+    sab: sharedBuffer,
+  });
   constructor(data: IBotInfo, workerPool: WorkerPool) {
     super();
     this.config = data;
     this.workerPool = workerPool;
-    ZobristTT.mount(GomokuBotInstance.sharedBuffer)
     // 自定义
     const board = Array(15).fill(0).map(() => Array(15).fill(0));
     const turn = GomokuRole.black;
@@ -178,7 +187,7 @@ export default class GomokuBotInstance extends BotInstance {
           this.config.role = player.role;
         }
         this.state.turn = data.curr_turn === this.config.player_id ? this.config.role as GomokuRole : (this.config.role === GomokuRole.black ? GomokuRole.white : GomokuRole.black);
-        this.state.hash = ZobristTT.calculate(this.state.board.flat(), this.state.turn === GomokuRole.black ? 1 : 2);
+        this.state.hash = GomokuBotInstance.zobristTT.calculate(this.state.board.flat(), this.state.turn === GomokuRole.black ? 1 : 2);
         // 若机器人先手触发 AI
         if (this.state.turn === this.config.role) {
           this.automate();
@@ -194,7 +203,7 @@ export default class GomokuBotInstance extends BotInstance {
       return false;
     }
     this.state.board[x][y] = GomokuRoleNumber[role];
-    this.state.hash = ZobristTT.update(this.state.hash, role === GomokuRole.black ? 1 : 2, { x, y });
+    this.state.hash = GomokuBotInstance.zobristTT.update(this.state.hash, role === GomokuRole.black ? 1 : 2, { x, y });
     this.state.turn = role === GomokuRole.black ? GomokuRole.white : GomokuRole.black;
     return true;
   }

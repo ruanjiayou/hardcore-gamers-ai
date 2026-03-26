@@ -1,6 +1,7 @@
 import GomokuAI from '../src/workers/gomoku'
 import { WorkerPool } from '../src/core/WorkerPool';
 import GomokuRobot, { GomokuRole } from '../src/games/gomoku/robot';
+import ZobristTT from '../src/utils/ZobristTT';
 
 const Robot = new GomokuRobot({
   slug: 'gomoku',
@@ -18,8 +19,16 @@ async function sleep(n: number) {
     }, n)
   })
 }
+const zobristTT = new ZobristTT({
+  rows: 15,
+  cols: 15,
+  types: 2,
+  seed: 8888,
+  size: 1 << 20,
+  sab: new SharedArrayBuffer((15 * 15 * 2 + 1 + (1 << 20) * 4) * 8),
+});
 function automate(debug: boolean = false) {
-  const AI = new GomokuAI();
+  const AI = new GomokuAI(zobristTT);
   AI.debug = debug;
   const move = AI.getBestMove(Robot.getSnapShot())
   if (move) {

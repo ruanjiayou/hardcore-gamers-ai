@@ -131,8 +131,8 @@ export default class GomokuBotInstance extends BotFather {
       this.state.hash = 0n;
     })
     this.socket.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: GomokuRole } }) => {
-      console.log(`player action: ${data.curr_turn} ${data.to.x},${data.to.y}`)
-      if (!this.isLegalMove(data.to.x, data.to.y)) {
+      console.log(`${this.config.player_id} 收到 player action: ${data.curr_turn} ${data.to.x},${data.to.y}`)
+      if (!this.isLegalMove(data.to.x, data.to.y, data.to.role)) {
         // 同步数据
         this.makeMove(data.to.x, data.to.y, data.to.role)
         // 轮到 AI 回合
@@ -172,7 +172,7 @@ export default class GomokuBotInstance extends BotFather {
   }
 
   getMatchState(match_id: string) {
-    console.log(`获取游戏对战数据`, match_id)
+    console.log(`获取游戏对战数据`, match_id, this.config.player_id)
     this.socket?.emit(
       SendoutEvent.GetMatchState,
       { game_slug: this.slug, match_id: match_id },
@@ -194,7 +194,7 @@ export default class GomokuBotInstance extends BotFather {
         }
       })
   }
-  isLegalMove(x: number, y: number) {
+  isLegalMove(x: number, y: number, role: GomokuRole) {
     return this.state.board[x][y] ? true : false;
   }
   makeMove(x: number, y: number, role: GomokuRole): boolean {

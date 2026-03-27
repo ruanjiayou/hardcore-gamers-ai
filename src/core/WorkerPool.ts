@@ -1,4 +1,4 @@
-import GameRobots from "../games/robots";
+import GameRobots from "@/bots/robots";
 
 type SLUG = keyof typeof GameRobots
 
@@ -16,10 +16,7 @@ export class WorkerPool {
         worker.postMessage({
           slug: slug,
           event: 'INIT',
-          data: {
-            ...GameRobots[slug].zobristTT.getConfig(),
-            sab: GameRobots[slug].sab
-          }
+          data: GameRobots[slug].zobristTT.getConfig()
         });
         workers.push(worker);
       }

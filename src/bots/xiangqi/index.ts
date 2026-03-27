@@ -1,9 +1,10 @@
-import ZobristTT from "./ZobristTT";
-import type { WorkerPool } from "../../core/WorkerPool";
-import { BotInstance } from "../../core/BotFatory";
 import { cloneDeep } from 'lodash'
-import type { IBotInfo, IPlayer } from "../../@types";
 import { io, Socket } from "socket.io-client";
+import type { WorkerPool } from "@/core/WorkerPool";
+import type { IBotInfo, IPlayer, IZTT } from "@/@types";
+
+import ZobristTT from "@/utils/ZobristTT";
+import { BotFather } from "@/@types";
 
 export enum XiangqiRole {
   black = 'black',
@@ -62,15 +63,26 @@ export const ReceiveEvent = {
 
 } as const;
 
-export default class XiangqiBotInstance extends BotInstance {
+const ZTT: IZTT = {
+  seed: 8889,
+  rows: 9,
+  cols: 10,
+  types: 14,
+  slots: 1 << 20,
+  sab: undefined as any,
+}
+ZTT.sab = new SharedArrayBuffer((ZTT.rows * ZTT.cols * ZTT.types + 1 + ZTT.slots * 4) * 8);
+
+export default class XiangqiBot extends BotFather {
   override socket?: Socket;
   override config: IBotInfo;
   override workerPool: WorkerPool;
 
   readonly slug = 'xiagnqi';
   state: XiangqiState;
-  // 1M entries
-  static sharedBuffer = new SharedArrayBuffer(1024 * 1024 * 16)
+
+  static zobristTT = new ZobristTT(ZTT);
+
   constructor(data: IBotInfo, workerPool: WorkerPool) {
     super();
     this.config = data;
@@ -86,7 +98,7 @@ export default class XiangqiBotInstance extends BotInstance {
     }
     this.initial();
   }
-  override initial(): void {
+  override initial() {
     this.socket = io(this.config.serverUrl, {
       query: { ticket: this.config.ticket },
       autoConnect: true,
@@ -134,7 +146,8 @@ export default class XiangqiBotInstance extends BotInstance {
           this.automate();
         }
       }
-    })
+    });
+    return this;
   }
   async automate() {
     const decision = await this.workerPool.dispatch(this.slug, {
@@ -174,7 +187,7 @@ export default class XiangqiBotInstance extends BotInstance {
           this.config.role = player.role;
         }
         this.state.turn = data.curr_turn === this.config.player_id ? this.config.role as XiangqiRole : (this.config.role === XiangqiRole.black ? XiangqiRole.red : XiangqiRole.black);
-        this.state.hash = ZobristTT.calculate(this.state.board.flat(), XiangqiRoleNumber[this.state.turn]);
+        this.state.hash = XiangqiBot.zobristTT.calculate(this.state.board.flat(), XiangqiRoleNumber[this.state.turn]);
         // 若机器人先手触发 AI
         if (this.state.turn === this.config.role) {
           this.automate();
@@ -186,7 +199,7 @@ export default class XiangqiBotInstance extends BotInstance {
   }
   makeMove(x: number, y: number, role: XiangqiRole) {
     this.state.board[x][y] = XiangqiRoleNumber[role];
-    this.state.hash = ZobristTT.update(this.state.hash, XiangqiRoleNumber[role], { x, y });
+    this.state.hash = XiangqiBot.zobristTT.update(this.state.hash, XiangqiRoleNumber[role], { x, y });
     this.state.turn = role === XiangqiRole.black ? XiangqiRole.red : XiangqiRole.black;
   }
   // 获取快照

@@ -33,6 +33,8 @@ export default class ZobristTT {
   public slots;
   public seed: number;
 
+  public sab: SharedArrayBuffer;
+
   // sab 分为4部分: zobrist + 换手hash + 置换表 + 取模掩码
   public zobrist!: BigUint64Array;
   public TS_hash!: bigint;
@@ -40,6 +42,8 @@ export default class ZobristTT {
   public TT_mask!: bigint;
 
   constructor(param: { rows: number, cols: number, types: number, seed: number, slots: number, sab: SharedArrayBuffer }) {
+    this.sab = param.sab;
+
     this.seed = param.seed;
     this.rows = param.rows;
     this.cols = param.cols;
@@ -73,6 +77,7 @@ export default class ZobristTT {
       cols: this.cols,
       types: this.types,
       slots: this.slots,
+      sab: this.sab,
     }
   }
 

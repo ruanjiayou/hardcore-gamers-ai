@@ -1,9 +1,8 @@
-import ZobristTT from "../../utils/ZobristTT";
-import type { WorkerPool } from "../../core/WorkerPool";
-import { BotInstance } from "../../core/BotFatory";
 import { cloneDeep } from 'lodash'
-import type { IBotInfo, IPlayer } from "../../@types";
 import { io, Socket } from "socket.io-client";
+import type { WorkerPool } from "@/core/WorkerPool";
+import { BotFather, type IBotInfo, type IPlayer, type IZTT } from "@/@types";
+import ZobristTT from "@/utils/ZobristTT";
 
 export enum GomokuRole {
   black = 'black',
@@ -62,24 +61,24 @@ export const ReceiveEvent = {
 
 } as const;
 
-const sharedBuffer = new SharedArrayBuffer((15 * 15 * 2 + 1 + (1 << 20) * 4) * 8);
+const ZTT: IZTT = {
+  seed: 8888,
+  rows: 15,
+  cols: 15,
+  types: 2,
+  slots: 1 << 20,
+  sab: undefined as any
+}
+ZTT.sab = new SharedArrayBuffer((ZTT.rows * ZTT.cols * ZTT.types + 1 + ZTT.slots * 4) * 8);
 
-export default class GomokuBotInstance extends BotInstance {
+export default class GomokuBotInstance extends BotFather {
   override socket?: Socket;
   override config: IBotInfo;
   override workerPool: WorkerPool;
 
   readonly slug = 'gomoku';
   state: GomokuState;
-  static sab: SharedArrayBuffer = sharedBuffer;
-  static zobristTT = new ZobristTT({
-    seed: 8888,
-    rows: 15,
-    cols: 15,
-    types: 2,
-    slots: 1 << 20,
-    sab: sharedBuffer,
-  });
+  static zobristTT = new ZobristTT(ZTT);
   constructor(data: IBotInfo, workerPool: WorkerPool) {
     super();
     this.config = data;
@@ -93,7 +92,7 @@ export default class GomokuBotInstance extends BotInstance {
       turn,
     }
   }
-  override initial(): void {
+  override initial() {
     this.socket = io(this.config.serverUrl, {
       query: { ticket: this.config.ticket },
       autoConnect: true,
@@ -141,7 +140,8 @@ export default class GomokuBotInstance extends BotInstance {
           this.automate();
         }
       }
-    })
+    });
+    return this;
   }
   async automate() {
     if (this.state.turn !== this.config.role) {

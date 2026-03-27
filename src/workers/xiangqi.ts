@@ -3,8 +3,8 @@ import ZobristTT, { TTFlag } from "@/utils/ZobristTT";
 declare var self: Worker;
 
 enum PLAYER_ROLE {
-  black = 1, // 黑棋（通常AI执黑，可根据需要调整）
-  white = 2, // 白棋
+  red = 1, // 红棋通(先手)
+  black = 2, // 黑棋
 }
 type Point = {
   x: number,
@@ -12,7 +12,7 @@ type Point = {
 }
 let zobristTT: ZobristTT | null = null;
 // 五子棋AI类
-export default class GomokuAI {
+export default class XiangqiAI {
   zobristTT: ZobristTT;
   width: number;
   height: number;
@@ -94,7 +94,7 @@ export default class GomokuAI {
     };
   }
   // 公开接口：传入当前棋盘（二维数组），当前要走的玩家（1或2），搜索深度，返回最佳落子 { x, y }
-  getBestMove(payload: { board: number[][], turn: 'black' | 'white', hash: bigint, depth?: number }) {
+  getBestMove(payload: { board: number[][], turn: 'black' | 'red', hash: bigint, depth?: number }) {
     const { board, turn, hash, depth = 4 } = payload;
     // 初始化走法列表
     let moves = this.generateMoves(board);
@@ -109,7 +109,7 @@ export default class GomokuAI {
       bestScore = -Infinity;
       for (let move of moves) {
         // 尝试落子
-        board[move.x][move.y] = turn === 'black' ? 1 : 2;
+        board[move.x][move.y] = turn === 'black' ? 2 : 1;
         if (this.isWin(board, move.x, move.y, PLAYER_ROLE[turn])) {
           board[move.x][move.y] = this.empty;
           return move;
@@ -428,7 +428,7 @@ export default class GomokuAI {
     return false;
   }
   opponent(player: number) {
-    return player === PLAYER_ROLE.black ? PLAYER_ROLE.white : PLAYER_ROLE.black;
+    return player === PLAYER_ROLE.black ? PLAYER_ROLE.red : PLAYER_ROLE.black;
   }
 }
 
@@ -443,7 +443,7 @@ if (isWorker) {
       zobristTT = new ZobristTT(data);
       return;
     }
-    let decision = new GomokuAI(zobristTT!).getBestMove(data);
+    let decision = new XiangqiAI(zobristTT!).getBestMove(data);
 
     self.postMessage({ taskId, decision });
   };

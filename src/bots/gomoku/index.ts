@@ -1,7 +1,7 @@
 import { cloneDeep } from 'lodash'
 import { io, Socket } from "socket.io-client";
 import type { WorkerPool } from "@/core/WorkerPool";
-import { BotFather, type IBotInfo, type IPlayer, type IZTT } from "@/@types";
+import { BotFather, type IBotInfo, type IPlayer, type IZTT } from "@/types";
 import ZobristTT from "@/utils/ZobristTT";
 
 export enum GomokuRole {

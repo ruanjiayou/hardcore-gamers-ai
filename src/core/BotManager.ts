@@ -1,5 +1,5 @@
 import { WorkerPool } from "./WorkerPool";
-import type { IBotInfo, BotFather } from "@/@types/index.ts";
+import type { IBotInfo, BotFather } from "@/types";
 import GameRobots, { type SLUG } from "@/bots/robots";
 
 export class BotManager {

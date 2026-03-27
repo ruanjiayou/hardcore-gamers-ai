@@ -1,10 +1,10 @@
 import { cloneDeep } from 'lodash'
 import { io, Socket } from "socket.io-client";
 import type { WorkerPool } from "@/core/WorkerPool";
-import type { IBotInfo, IPlayer, IZTT } from "@/@types";
+import type { IBotInfo, IPlayer, IZTT } from "@/types";
 
 import ZobristTT from "@/utils/ZobristTT";
-import { BotFather } from "@/@types";
+import { BotFather } from "@/types";
 
 export enum XiangqiRole {
   black = 'black',

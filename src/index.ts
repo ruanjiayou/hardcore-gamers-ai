@@ -1,9 +1,14 @@
 import { BotManager } from "./core/BotManager";
 import sqlite from "@/utils/sqlite";
+import rootLogger from "./logger";
+
+const logger = rootLogger.child({
+  service: 'http',
+})
 
 const manager = new BotManager();
 sqlite.getRobots().forEach(robot => {
-  console.log(`玩家 ${robot.player_id} 重新连接`, robot)
+  logger.info(robot, `玩家 ${robot.player_id} 重新连接`)
   manager.addBot(robot)
 })
 // 使用 Bun.serve 创建一个高性能控制接口
@@ -12,13 +17,13 @@ const server = Bun.serve({
   port: 8086,
   async fetch(req) {
     const url = new URL(req.url);
-    console.log(req.method, req.url,)
+    logger.info({ method: req.method, url: req.url })
     // 路径设计：/create-bot
     if (url.pathname === "/add-robot" && req.method === "POST") {
       try {
         const data = await req.json() as any;
         manager.addBot(data);
-        console.log(sqlite.createRobot({
+        logger.info(sqlite.createRobot({
           $player_id: data.player_id,
           $serverUrl: data.serverUrl,
           $slug: data.slug,
@@ -26,7 +31,7 @@ const server = Bun.serve({
           $match_id: data.match_id || '',
           $room_id: data.room_id,
           $ticket: data.ticket
-        }))
+        }), '保存人机信息')
         return new Response(JSON.stringify({ code: 0 }), {
           headers: { "Content-Type": "application/json" }
         });
@@ -38,7 +43,7 @@ const server = Bun.serve({
     // 路径设计：/destroy-bot (游戏结束时回收)
     if (url.pathname === "/rem-robot" && req.method === "POST") {
       const { player_id } = await req.json() as any;
-      console.log(sqlite.removeRobot(player_id))
+      logger.info(sqlite.removeRobot(player_id), '移除人机')
       manager.removeBot(player_id);
       return new Response(JSON.stringify({ code: 0 }), {
         headers: { "Content-Type": 'application/json' },
@@ -51,4 +56,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`🤖 Bot Control System running on ${server.port}`);
+logger.info(`🤖 Bot Control System running on ${server.port}`);

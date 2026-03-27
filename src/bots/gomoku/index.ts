@@ -3,6 +3,11 @@ import { io, Socket } from "socket.io-client";
 import type { WorkerPool } from "@/core/WorkerPool";
 import { BotFather, type IBotInfo, type IPlayer, type IZTT } from "@/types";
 import ZobristTT from "@/utils/ZobristTT";
+import rootLogger from '@/logger';
+
+const logger = rootLogger.child({
+  service: 'gomoku'
+})
 
 export enum GomokuRole {
   black = 'black',
@@ -103,12 +108,12 @@ export default class GomokuBotInstance extends BotFather {
     this.socket.once('connect', () => {
       // 添加机器人后自动加入房间
       this.socket?.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id, type: 'player' }, (success: boolean, player: IPlayer) => {
-        console.log(`玩家 ${this.config.player_id} 加入房间`, success)
+        logger.info(`玩家 ${this.config.player_id} 加入房间 ${success}`)
         if (success) {
           // 只准备一次,防重连时重复发送
           if (player.state === 'online') {
             this.socket?.emit(SendoutEvent.PlayerReady, { room_id: this.config.room_id, player_id: this.config.player_id, ready: true }, (ok: boolean) => {
-              console.log(`玩家 ${this.config.player_id} 准备 ${ok}`)
+              logger.info(`玩家 ${this.config.player_id} 准备 ${ok}`)
             })
           } else if (player.state === 'inroom') {
             this.socket?.emit(SendoutEvent.GetRoomDetail, { room_id: this.config.room_id }, (data: any) => {
@@ -131,7 +136,7 @@ export default class GomokuBotInstance extends BotFather {
       this.state.hash = 0n;
     })
     this.socket.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: GomokuRole } }) => {
-      console.log(`${this.config.player_id} 收到 player action: ${data.curr_turn} ${data.to.x},${data.to.y}`)
+      logger.info(`${this.config.player_id} 收到 player action: ${data.curr_turn} ${data.to.x},${data.to.y}`)
       if (!this.isLegalMove(data.to.x, data.to.y, data.to.role)) {
         // 同步数据
         this.makeMove(data.to.x, data.to.y, data.to.role)
@@ -145,7 +150,7 @@ export default class GomokuBotInstance extends BotFather {
   }
   async automate() {
     if (this.state.turn !== this.config.role) {
-      console.log('非法回合')
+      logger.info('非法回合')
       return;
     }
     await new Promise((resolve) => {
@@ -163,7 +168,7 @@ export default class GomokuBotInstance extends BotFather {
         to: { x: decision.x, y: decision.y, role: this.config.role },
       },
       (result: { success: boolean; message: string }) => {
-        console.log('automate ', result.success, result.message)
+        logger.info(`automate: ${result.success} ${result.message}`)
       }
     )
   }
@@ -172,7 +177,7 @@ export default class GomokuBotInstance extends BotFather {
   }
 
   getMatchState(match_id: string) {
-    console.log(`获取游戏对战数据`, match_id, this.config.player_id)
+    logger.info(`获取游戏对战数据 ${match_id} ${this.config.player_id}`)
     this.socket?.emit(
       SendoutEvent.GetMatchState,
       { game_slug: this.slug, match_id: match_id },
@@ -199,7 +204,7 @@ export default class GomokuBotInstance extends BotFather {
   }
   makeMove(x: number, y: number, role: GomokuRole): boolean {
     if (this.state.board[x][y]) {
-      console.log('非法落子')
+      logger.info('非法落子')
       return false;
     }
     this.state.board[x][y] = GomokuRoleNumber[role];

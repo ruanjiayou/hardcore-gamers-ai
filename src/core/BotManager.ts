@@ -1,6 +1,11 @@
 import { WorkerPool } from "./WorkerPool";
 import type { IBotInfo, BotFather } from "@/types";
 import GameRobots, { type SLUG } from "@/bots/robots";
+import rootLogger from "@/logger";
+
+const logger = rootLogger.child({
+  service: 'botManager'
+})
 
 export class BotManager {
   private robots = new Map<string, BotFather>();
@@ -19,10 +24,11 @@ export class BotManager {
       throw new Error('Unsupported game type')
     }
     this.robots.set(data.player_id, new GameRobot(data, this.workerPool).initial());
-    console.log(`[Manager] Bot ${data.player_id} joined ${data.slug}`);
+    logger.info(`Bot ${data.player_id} joined ${data.slug}`);
   }
 
   removeBot(id: string) {
+    logger.info(`Bot removed ${id}`)
     this.robots.get(id)?.socket?.disconnect();
     this.robots.delete(id);
   }

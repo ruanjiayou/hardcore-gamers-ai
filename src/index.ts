@@ -4,6 +4,7 @@ import rootLogger from "./logger";
 
 const logger = rootLogger.child({
   service: 'http',
+  user_id: "system"
 })
 
 const manager = new BotManager();

@@ -13,11 +13,15 @@ export class WorkerPool {
       const workers: Worker[] = [];
       for (let j = 0; j < size; j++) {
         const worker = new Worker(path);
-        worker.postMessage({
-          slug: slug,
-          event: 'INIT',
-          data: GameRobots[slug].zobristTT.getConfig()
-        });
+        // 象棋引擎自建置换表，不需要共享初始化；五子棋沿用共享 ZobristTT
+        const tt = (GameRobots[slug] as any).zobristTT;
+        if (tt) {
+          worker.postMessage({
+            slug: slug,
+            event: 'INIT',
+            data: tt.getConfig()
+          });
+        }
         workers.push(worker);
       }
       this.workersMap.set(slug, workers);

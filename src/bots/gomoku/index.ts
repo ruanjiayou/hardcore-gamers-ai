@@ -84,6 +84,8 @@ export default class GomokuBotInstance extends BotFather {
   readonly slug = 'gomoku';
   state: GomokuState;
   static zobristTT = new ZobristTT(ZTT);
+  // 防止一次落子被多个事件源（game-start / 主动探测 / player-action 兜底）重复触发
+  private thinking = false;
   constructor(data: IBotInfo, workerPool: WorkerPool) {
     super();
     this.config = data;
@@ -105,26 +107,20 @@ export default class GomokuBotInstance extends BotFather {
       reconnectionDelay: 3000,
     });
     this.socket.connect();
-    this.socket.once('connect', () => {
+    // 关键修复：用 on 而非 once。socket 断线重连后会再次触发 connect，
+    // 必须重新加入 room 频道并恢复对局，否则重连后机器人"哑火"。
+    this.socket.on('connect', () => {
       // 添加机器人后自动加入房间
-      this.socket?.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id, type: 'player' }, (success: boolean, player: IPlayer) => {
+      this.socket?.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id, type: 'player' }, (success: boolean) => {
         logger.info(`玩家 ${this.config.player_id} 加入房间 ${success}`)
-        if (success) {
-          // 只准备一次,防重连时重复发送
-          if (player.state === 'online') {
-            this.socket?.emit(SendoutEvent.PlayerReady, { room_id: this.config.room_id, player_id: this.config.player_id, ready: true }, (ok: boolean) => {
-              logger.info(`玩家 ${this.config.player_id} 准备 ${ok}`)
-            })
-          } else if (player.state === 'inroom') {
-            this.socket?.emit(SendoutEvent.GetRoomDetail, { room_id: this.config.room_id }, (data: any) => {
-              this.config.match_id = data.match_id
-              this.getMatchState(data.match_id);
-            })
-          }
-        }
+        if (!success) return;
+        // 进房即 prepared 由服务端统一处理，机器人无需再发 player-ready。
+        // 加入后主动查一次房间详情：若房间已开局（重连/或开局广播早于入房），立即恢复对局。
+        this.resumeFromRoomDetail();
       });
     });
     this.socket.on(ReceiveEvent.GameStart, async (data: { room_id: string, match_id: string }) => {
+      if (!data?.match_id) return;
       this.config.match_id = data.match_id;
       // 游戏开始,先获取数据
       this.getMatchState(data.match_id);
@@ -137,8 +133,18 @@ export default class GomokuBotInstance extends BotFather {
     })
     this.socket.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: GomokuRole } }) => {
       logger.info(`${this.config.player_id} 收到 player action: ${data.curr_turn} ${data.to.x},${data.to.y}`)
-      if (!this.isLegalMove(data.to.x, data.to.y, data.to.role)) {
-        // 同步数据
+      // 兜底自愈：若角色/对局状态尚未初始化（game-start 事件丢失或到达时还没入房），
+      // 先主动拉一次权威对局状态。getMatchState 内部会在轮到自己时触发落子。
+      if (!this.roleReady()) {
+        logger.info(`${this.config.player_id} 对局状态未就绪，主动恢复`);
+        this.resumeFromRoomDetail();
+        return;
+      }
+      // 机器人自己落子时（automate）只 emit、不更新本地棋盘，依赖服务端广播回显来同步。
+      // 因此无论对手还是自己的落子，到达时该点在棋盘上都应是空的 -> 需要 makeMove 同步并翻转回合。
+      // 若该点已被占用，说明是重复广播，跳过避免重复翻转回合。
+      if (this.isLegalMove(data.to.x, data.to.y, data.to.role)) {
+        // 同步落子到棋盘并翻转回合
         this.makeMove(data.to.x, data.to.y, data.to.role)
         // 轮到 AI 回合
         if (data.next_turn === this.config.player_id) {
@@ -148,29 +154,54 @@ export default class GomokuBotInstance extends BotFather {
     });
     return this;
   }
+  /** 角色已由权威对局状态初始化 */
+  private roleReady(): boolean {
+    return this.config.role === GomokuRole.black || this.config.role === GomokuRole.white;
+  }
+  /** 主动查询房间详情，若已开局则恢复对局（不依赖 game-start 事件） */
+  private resumeFromRoomDetail() {
+    this.socket?.emit(SendoutEvent.GetRoomDetail, { room_id: this.config.room_id }, (data: any) => {
+      if (data?.match_id) {
+        this.config.match_id = data.match_id;
+        this.getMatchState(data.match_id);
+      }
+    });
+  }
   async automate() {
-    if (this.state.turn !== this.config.role) {
-      logger.info('非法回合')
+    if (this.thinking) return;
+    if (!this.roleReady() || this.state.turn !== this.config.role) {
+      logger.info(`非法回合 (turn=${this.state.turn}, role=${this.config.role})`)
       return;
     }
-    await new Promise((resolve) => {
-      setTimeout(() => { resolve(true) }, 1500)
-    })
-    const decision = await this.workerPool.dispatch(this.slug, {
-      event: 'compute',
-      data: this.getSnapShot(),
-    })
-    this.socket?.emit(
-      ReceiveEvent.PlayerAction,
-      this.config.match_id,
-      {
-        player_id: this.config.player_id,
-        to: { x: decision.x, y: decision.y, role: this.config.role },
-      },
-      (result: { success: boolean; message: string }) => {
-        logger.info(`automate: ${result.success} ${result.message}`)
-      }
-    )
+    this.thinking = true;
+    // 兜底解锁：即使服务端 ack 因网络原因未回，也不会永久锁死机器人
+    const unlock = setTimeout(() => { this.thinking = false; }, 6000);
+    try {
+      await new Promise((resolve) => {
+        setTimeout(() => { resolve(true) }, 1500)
+      })
+      const decision = await this.workerPool.dispatch(this.slug, {
+        event: 'compute',
+        data: this.getSnapShot(),
+      })
+      this.socket?.emit(
+        ReceiveEvent.PlayerAction,
+        this.config.match_id,
+        {
+          player_id: this.config.player_id,
+          to: { x: decision.x, y: decision.y, role: this.config.role },
+        },
+        (result: { success: boolean; message: string }) => {
+          logger.info(`automate: ${result?.success} ${result?.message ?? ''}`)
+          clearTimeout(unlock);
+          this.thinking = false;
+        }
+      )
+    } catch (e) {
+      clearTimeout(unlock);
+      this.thinking = false;
+      logger.error(`${this.config.player_id} 计算落子失败`, e as any);
+    }
   }
   override destroy(): void {
     this.socket?.disconnect();
@@ -182,6 +213,8 @@ export default class GomokuBotInstance extends BotFather {
       SendoutEvent.GetMatchState,
       { game_slug: this.slug, match_id: match_id },
       (data: { board: { [key: string]: string }, players: { _id: string, role: string }[], curr_turn: string, match_id: string }) => {
+        // 恢复对局时先清空棋盘，避免与旧状态叠加（重连/重复恢复场景）
+        this.state.board = Array(15).fill(0).map(() => Array(15).fill(0));
         Object.entries(data.board).forEach(kv => {
           const [key, role] = kv;
           const [x, y] = key.split('|').map(v => parseInt(v));
@@ -200,15 +233,19 @@ export default class GomokuBotInstance extends BotFather {
       })
   }
   isLegalMove(x: number, y: number, role: GomokuRole) {
-    return this.state.board[x][y] ? true : false;
+    // 落子点必须是空位（原实现取反，导致同步对手落子时判断颠倒）
+    return !this.state.board[x][y];
   }
   makeMove(x: number, y: number, role: GomokuRole): boolean {
-    if (this.state.board[x][y]) {
+    if (!this.isLegalMove(x, y, role)) {
       logger.info('非法落子')
       return false;
     }
-    this.state.board[x][y] = GomokuRoleNumber[role];
-    this.state.hash = GomokuBotInstance.zobristTT.update(this.state.hash, role === GomokuRole.black ? 1 : 2, { x, y });
+    const piece = role === GomokuRole.black ? 1 : 2;
+    this.state.board[x][y] = piece;
+    this.state.hash = GomokuBotInstance.zobristTT.place(
+      this.state.hash, GomokuBotInstance.zobristTT.square(x, y), piece
+    );
     this.state.turn = role === GomokuRole.black ? GomokuRole.white : GomokuRole.black;
     return true;
   }

@@ -1,4 +1,5 @@
 import ZobristTT, { TTFlag } from "@/utils/ZobristTT";
+import { BLACK, checkForbidden, isFive } from "@/games/gomokuRules";
 
 declare var self: Worker;
 
@@ -94,90 +95,116 @@ export default class GomokuAI {
     };
   }
   // 公开接口：传入当前棋盘（二维数组），当前要走的玩家（1或2），搜索深度，返回最佳落子 { x, y }
-  getBestMove(payload: { board: number[][], turn: 'black' | 'white', hash: bigint, depth?: number }) {
+  getBestMove(payload: { board: number[][], turn: 'black' | 'white', hash: bigint, depth?: number, renju?: boolean }) {
     const { board, turn, hash, depth = 4 } = payload;
-    // 初始化走法列表
-    let moves = this.generateMoves(board);
-    if (!moves[0]) return null; // 棋盘已满
+    const renju = payload.renju ?? true; // 默认启用连珠禁手
+    const me = PLAYER_ROLE[turn];
+
+    // 初始化走法列表，黑棋过滤掉禁手点
+    let moves = this.generateMoves(board).filter(m => !this.isForbidden(board, m.x, m.y, me, renju));
+    if (!moves[0]) return null; // 棋盘已满 / 无合法点
+
+    // 快速路径 1：自己能直接成五 -> 立即取胜
+    for (const move of moves) {
+      board[move.x][move.y] = me;
+      const win = isFive(board, move.x, move.y, me);
+      board[move.x][move.y] = this.empty;
+      if (win) return move;
+    }
+
+    // 快速路径 2：对手下一步能成五 -> 必须封堵（若能堵住多个点则交给搜索决定）
+    const opp = this.opponent(me);
+    const threats = this.generateMoves(board).filter(m => {
+      board[m.x][m.y] = opp;
+      const win = isFive(board, m.x, m.y, opp);
+      board[m.x][m.y] = this.empty;
+      return win;
+    });
+    if (threats.length === 1) {
+      const block = threats[0];
+      if (!this.isForbidden(board, block.x, block.y, me, renju)) return block;
+    }
 
     // 使用迭代加深，优先用浅层搜索结果作为深层搜索的启发
     let bestMove = moves[0];
-    let bestScore = -Infinity;
     for (let d = 1; d <= depth; d++) {
       let alpha = -Infinity;
-      let beta = Infinity;
-      bestScore = -Infinity;
+      const beta = Infinity;
       for (let move of moves) {
-        // 尝试落子
-        board[move.x][move.y] = turn === 'black' ? 1 : 2;
-        if (this.isWin(board, move.x, move.y, PLAYER_ROLE[turn])) {
-          board[move.x][move.y] = this.empty;
-          return move;
-        }
-        const next_hash = this.zobristTT.update(hash, PLAYER_ROLE[turn], move)
-        let score = -this.alphaBeta(board, this.opponent(PLAYER_ROLE[turn]), d - 1, -beta, -alpha, next_hash);
+        board[move.x][move.y] = me;
+        const next_hash = this.zobristTT.place(hash, this.zobristTT.square(move.x, move.y), me);
+        const score = -this.alphaBeta(board, opp, d - 1, -beta, -alpha, next_hash, renju);
         board[move.x][move.y] = this.empty; // 回溯
-        if (score > bestScore) {
-          bestScore = score;
+        if (score > alpha) {
+          alpha = score;
           bestMove = move;
         }
-        alpha = Math.max(alpha, bestScore);
       }
-      // 每加深一层，可以用最佳走法重新排序走法列表，提高剪枝效率
+      // 每加深一层，把最佳走法放到前面，提高剪枝效率
       moves = this.reorderMoves(moves, bestMove);
     }
     return bestMove;
   }
 
+  /** 该点是否为当前棋方的禁手点 */
+  isForbidden(board: number[][], x: number, y: number, color: number, renju: boolean): boolean {
+    if (!renju || color !== BLACK || board[x][y] !== this.empty) return false;
+    return checkForbidden(board, x, y, color) !== null;
+  }
+
   // α-β递归
-  alphaBeta(board: number[][], player: number, depth: number, alpha: number, beta: number, hash: bigint) {
-    if (depth === 0) {
-      return this.evaluate(board, player);
-    }
+  alphaBeta(board: number[][], player: number, depth: number, alpha: number, beta: number, hash: bigint, renju = true) {
+    const alphaOrig = alpha;
+    // 胜利用大常数，并加上 depth 让引擎优先选择"更快取胜 / 更晚落败"
+    const WIN = this.score.FIVE + 1000000;
+
     // 置换表查询
     const entry = this.zobristTT.probe(hash);
     if (entry && entry.depth >= depth) {
       if (entry.flag === TTFlag.EXACT) return entry.score;
-      if (entry.flag === TTFlag.ALPHA) beta = Math.max(beta, entry.score);
-      if (entry.flag === TTFlag.BETA) alpha = Math.min(alpha, entry.score);
+      if (entry.flag === TTFlag.ALPHA) alpha = Math.max(alpha, entry.score);
+      if (entry.flag === TTFlag.BETA) beta = Math.min(beta, entry.score);
       if (alpha >= beta) return entry.score;
     }
+    if (depth === 0) {
+      return this.evaluate(board, player);
+    }
 
-    let moves = this.generateMoves(board);
+    let moves = this.generateMoves(board).filter(m => !this.isForbidden(board, m.x, m.y, player, renju));
     if (moves.length === 0) return 0; // 平局
 
-    // 走法排序：根据历史启发或简单按位置中心度排序
     moves = this.orderMoves(moves);
 
     let bestScore = -Infinity;
     let bestMove: { x: number, y: number } | null = null;
-    let flag = TTFlag.BETA; // 默认当前节点是上界（因为没更新alpha）
 
     for (let move of moves) {
       board[move.x][move.y] = player;
-      if (this.isWin(board, move.x, move.y, player)) {
-        return this.score.FIVE;
+      // 用规则模块判胜：黑棋长连不算胜
+      const win = isFive(board, move.x, move.y, player);
+      let score: number;
+      if (win) {
+        score = WIN + depth;
+      } else {
+        const next_hash = this.zobristTT.place(hash, this.zobristTT.square(move.x, move.y), player);
+        score = -this.alphaBeta(board, this.opponent(player), depth - 1, -beta, -alpha, next_hash, renju);
       }
-      const next_hash = this.zobristTT.update(hash, player, move)
-      let score: number = -this.alphaBeta(board, this.opponent(player), depth - 1, -beta, -alpha, next_hash);
       board[move.x][move.y] = this.empty;
       if (score > bestScore) {
         bestScore = score;
         bestMove = move;
       }
       alpha = Math.max(alpha, bestScore);
-      if (alpha >= beta) {
-        flag = TTFlag.ALPHA; // 剪枝，说明实际值至少为alpha
-        break;
-      }
+      if (alpha >= beta) break;
     }
 
-    // 存入置换表
+    // 正确的置换表标志：与原始 alpha/beta 比较，而非与裁剪后的 alpha 比较
     let entryFlag = TTFlag.EXACT;
-    if (bestScore <= alpha) entryFlag = TTFlag.ALPHA;
+    if (bestScore <= alphaOrig) entryFlag = TTFlag.ALPHA;
     else if (bestScore >= beta) entryFlag = TTFlag.BETA;
 
-    this.zobristTT.store(hash, bestScore, depth, entryFlag, this.zobristTT.encodeMovement(0, this.encodeMove(bestMove as Point), player, 0, 0))
+    this.zobristTT.store(hash, bestScore, depth, entryFlag,
+      this.zobristTT.encodeMovement(0, this.encodeMove(bestMove as Point), player, 0, 0))
     return bestScore;
   }
 

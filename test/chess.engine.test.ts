@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { chooseMove, createInitialBoard, inCheck } from '../src/international-chess/engine';
-import { computeMove } from '../src/workers/international-chess';
+import { chooseMove, createInitialBoard, inCheck } from '../src/chess/engine';
+import { computeMove } from '../src/workers/chess';
 
 describe('国际象棋 AI 引擎', () => {
   test('开局白方能走出合法着法', () => {

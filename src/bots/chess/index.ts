@@ -2,10 +2,10 @@ import { io, Socket } from "socket.io-client";
 import type { WorkerPool } from "@/core/WorkerPool";
 import type { IBotInfo } from "@/types";
 import { BotFather } from "@/types";
-import { createInitialBoard, fromServerBoard, type IBoard } from '@/international-chess/engine';
+import { createInitialBoard, fromServerBoard, type IBoard } from '@/chess/engine';
 import rootLogger from '@/logger';
 
-const logger = rootLogger.child({ service: 'international-chess' });
+const logger = rootLogger.child({ service: 'chess' });
 
 interface ChessState { board: IBoard; white: boolean }
 
@@ -21,12 +21,12 @@ export const ReceiveEvent = {
   GameOver: 'room:game-over',
 } as const;
 
-export default class InternationalChessBot extends BotFather {
+export default class ChessBot extends BotFather {
   override socket?: Socket;
   override config: IBotInfo;
   override workerPool: WorkerPool;
 
-  readonly slug = 'international-chess';
+  readonly slug = 'chess';
   state: ChessState;
   private thinking = false;
 

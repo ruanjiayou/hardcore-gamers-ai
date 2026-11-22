@@ -16,7 +16,7 @@ export class BotManager {
       { slug: 'gomoku', size: 2, path: new URL("../workers/gomoku.ts", import.meta.url).href },
       { slug: 'xiangqi', size: 2, path: new URL("../workers/xiangqi.ts", import.meta.url).href },
       { slug: 'othello', size: 2, path: new URL("../workers/othello.ts", import.meta.url).href },
-      { slug: 'international-chess', size: 2, path: new URL("../workers/international-chess.ts", import.meta.url).href },
+      { slug: 'chess', size: 2, path: new URL("../workers/chess.ts", import.meta.url).href },
     ]);
   }
 

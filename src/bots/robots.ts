@@ -1,13 +1,13 @@
 import gomoku from "./gomoku";
 import xiangqi from './xiangqi'
 import othello from './othello'
-import internationalChess from './international-chess'
+import chess from './chess'
 
 const GameRobots = {
   gomoku,
   xiangqi,
   othello,
-  'international-chess': internationalChess,
+  chess,
 }
 
 export type SLUG = keyof typeof GameRobots

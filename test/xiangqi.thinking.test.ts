@@ -1,10 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import XiangqiBot from '../src/bots/xiangqi/index';
-import { RED, BLACK } from '../src/xiangqi/core';
+import { RED, BLACK } from '../src/engine/xiangqi/core';
 
 /**
- * 回归：象棋思考参数（深度 12 / 20s）必须真正传到 worker。
+ * 回归：象棋思考参数（深度 12 / 5s 上限）必须真正传到 worker。
  * 旧代码 config.role==='expert'?8:6 因 role 被覆盖成 red/black 恒为 6，深度死代码。
+ * 5s 是兜底上限，引擎在着法稳定（如被将军应将）时会提前返回。
  */
 function setup() {
   let captured: any = null;
@@ -37,13 +38,13 @@ function setup() {
 }
 
 describe('象棋思考参数', () => {
-  test('automate 向 worker 传 depth=12、timeLimitMs=20000', async () => {
+  test('automate 向 worker 传 depth=12、timeLimitMs=5000', async () => {
     const { bot, captured } = setup();
     await (bot as any).automate();
     expect(captured()).not.toBeNull();
     expect(captured().event).toBe('compute');
     expect(captured().data.depth).toBe(12);
-    expect(captured().data.timeLimitMs).toBe(20000);
+    expect(captured().data.timeLimitMs).toBe(5000);
     expect(captured().data.history).toEqual([]);
   });
 });

@@ -1,5 +1,5 @@
 import ZobristTT, { TTFlag } from "@/utils/ZobristTT";
-import { BLACK, checkForbidden, isFive } from "@/games/gomokuRules";
+import { BLACK, checkForbidden, isFive } from "@/engine/gomoku";
 
 declare var self: Worker;
 

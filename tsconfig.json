@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
@@ -10,6 +9,7 @@
     "lib": [
       "ESNext"
     ],
+    "types": ["bun"],
     "target": "ESNext",
     "module": "esnext",
     "moduleDetection": "force",

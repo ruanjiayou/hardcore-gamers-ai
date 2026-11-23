@@ -2,7 +2,7 @@ import { io, Socket } from "socket.io-client";
 import type { WorkerPool } from "@/core/WorkerPool";
 import type { IBotInfo } from "@/types";
 import { BotFather } from "@/types";
-import { createInitialBoard, fromServerBoard, type IBoard } from '@/chess/engine';
+import { createInitialBoard, fromServerBoard, type IBoard } from '@/engine/chess';
 import rootLogger from '@/logger';
 
 const logger = rootLogger.child({ service: 'chess' });

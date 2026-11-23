@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { chooseMove, createInitialBoard, inCheck } from '../src/chess/engine';
+import { chooseMove, createInitialBoard, inCheck } from '../src/engine/chess';
 import { computeMove } from '../src/workers/chess';
 
 describe('国际象棋 AI 引擎', () => {

@@ -1,4 +1,4 @@
-import { chooseMove, createInitialBoard, type IBoard } from "../chess/engine";
+import { chooseMove, createInitialBoard, type IBoard } from "@/engine/chess";
 
 declare var self: Worker;
 

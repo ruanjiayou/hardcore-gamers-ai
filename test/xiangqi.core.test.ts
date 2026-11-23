@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { Position, initialBoard, perft, sq, piece, RED, BLACK, R, N, C, P, K } from '../src/xiangqi/core';
+import { Position, initialBoard, perft, sq, piece, RED, BLACK, R, N, C, P, K } from '../src/engine/xiangqi/core';
 
 describe('象棋走法生成 Perft', () => {
   test('初始局面 perft(1) = 44', () => {

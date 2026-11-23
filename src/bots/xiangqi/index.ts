@@ -5,7 +5,7 @@ import { BotFather } from "@/types";
 import {
   RED, BLACK, SQ, sq, rowOf, colOf,
   piece, initialBoard,
-} from '@/xiangqi/core';
+} from '@/engine/xiangqi/core';
 import rootLogger from '@/logger';
 
 const logger = rootLogger.child({ service: 'xiangqi' });
@@ -149,9 +149,9 @@ export default class XiangqiBot extends BotFather {
       return;
     }
     this.thinking = true;
-    // 兜底解锁必须 > 思考预算(20s) + 300ms 手感延迟 + dispatch 开销，
+    // 兜底解锁必须 > 思考预算(5s) + 300ms 手感延迟 + dispatch 开销，
     // 否则锁提前释放会导致同一回合重复落子。
-    const unlock = setTimeout(() => { this.thinking = false; }, 23000);
+    const unlock = setTimeout(() => { this.thinking = false; }, 6000);
     try {
       // 思考"手感"延迟
       await new Promise(r => setTimeout(r, 300));
@@ -161,9 +161,10 @@ export default class XiangqiBot extends BotFather {
           board: this.state.board,
           side: this.state.side,
           // config.role 在对局中会被覆盖成 red/black，旧判断 'expert'?8:6 恒为 false。
-          // 固定深度 12 + 20s 预算：迭代加深在时间到时停在某层，深度是上限。
+          // 深度 12 是上限；引擎在着法稳定（尤其被将军应将）时会提前返回，
+          // 不必把预算耗满。5s 是兜底上限，避免中局每步都等 20s。
           depth: 12,
-          timeLimitMs: 20000,
+          timeLimitMs: 5000,
           history: this.state.history,
         },
       });

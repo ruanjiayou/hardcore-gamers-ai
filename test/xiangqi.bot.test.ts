@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import XiangqiBot from '../src/bots/xiangqi/index';
-import { initialBoard, sq, RED, BLACK } from '../src/xiangqi/core';
+import { initialBoard, sq, RED, BLACK } from '../src/engine/xiangqi/core';
 
 /**
  * 回归测试：象棋机器人收到人类走法后，必须同步棋盘、翻转 side 到己方，

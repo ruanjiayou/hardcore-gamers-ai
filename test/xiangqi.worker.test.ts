@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { computeMove } from '../src/workers/xiangqi';
-import { initialBoard, sq, rowOf, colOf } from '../src/xiangqi/core';
+import { initialBoard, sq, rowOf, colOf } from '../src/engine/xiangqi/core';
 
 describe('象棋 Worker 集成', () => {
   test('初始局面 computeMove 返回合法着法（红先）', () => {

@@ -1,4 +1,4 @@
-import { chooseMove, createInitialBoard, type OBoard } from "../othello/engine";
+import { chooseMove, createInitialBoard, type OBoard } from "@/engine/othello";
 
 declare var self: Worker;
 

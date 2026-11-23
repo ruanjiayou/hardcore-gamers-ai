@@ -2,9 +2,9 @@
  * 中国象棋 AI Worker
  * 接收棋盘快照，调用 XiangqiSearch 计算最佳着法。
  */
-import { Position, RED, BLACK } from '@/xiangqi/core';
-import { XiangqiSearch } from '@/xiangqi/search';
-import { openingBookMove } from '@/xiangqi/evaluate';
+import { Position, RED, BLACK } from '@/engine/xiangqi/core';
+import { XiangqiSearch } from '@/engine/xiangqi/search';
+import { openingBookMove } from '@/engine/xiangqi/evaluate';
 import type ZobristTT from '@/utils/ZobristTT';
 
 declare var self: Worker;

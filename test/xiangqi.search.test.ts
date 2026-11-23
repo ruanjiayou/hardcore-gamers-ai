@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
-import { Position, initialBoard, sq, piece, RED, BLACK, K, R, C, pieceColor, pieceType } from '../src/xiangqi/core';
-import { evaluateRed, openingBookMove } from '../src/xiangqi/evaluate';
-import { XiangqiSearch } from '../src/xiangqi/search';
+import { Position, initialBoard, sq, piece, RED, BLACK, K, R, C, pieceColor, pieceType } from '../src/engine/xiangqi/core';
+import { evaluateRed, openingBookMove } from '../src/engine/xiangqi/evaluate';
+import { XiangqiSearch } from '../src/engine/xiangqi/search';
 
 describe('象棋评估与开局库', () => {
   test('初始局面评估接近 0（红先略优）', () => {
@@ -84,6 +84,40 @@ describe('象棋搜索引擎', () => {
     const redView = engine.eval(new Position(pos.board, RED));
     const blackView = engine.eval(new Position(pos.board, BLACK));
     expect(redView).toBeCloseTo(-blackView, 6);
+  });
+});
+
+describe('象棋提前返回（响应手感）', () => {
+  test('被将军时应将快速返回，不再耗满时间预算', () => {
+    // 黑车 (5,3) 与红将 (9,3) 同列将红，红只有少量应将着法。
+    const b = new Int8Array(90);
+    b[sq(9, 3)] = piece(K, RED);
+    b[sq(0, 5)] = piece(K, BLACK);
+    b[sq(5, 3)] = piece(R, BLACK);
+    const pos = new Position(b, RED);
+    expect(pos.inCheck(RED)).toBe(true);
+
+    const engine = new XiangqiSearch();
+    const started = Date.now();
+    const res = engine.search(pos, { maxDepth: 12, timeLimitMs: 5000 });
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(res.depth).toBeLessThan(12); // 稳定性早停生效，不是搜到深度上限
+    const legal = pos.legalMoves();
+    expect(legal.some(m => m.from === res.from && m.to === res.to)).toBe(true);
+  });
+
+  test('找到绝杀立即返回，不等待剩余预算', () => {
+    const b = new Int8Array(90);
+    b[sq(9, 3)] = piece(K, RED);
+    b[sq(0, 4)] = piece(K, BLACK);
+    b[sq(5, 4)] = piece(R, RED);
+    const pos = new Position(b, RED);
+
+    const engine = new XiangqiSearch();
+    const started = Date.now();
+    const res = engine.search(pos, { maxDepth: 12, timeLimitMs: 5000 });
+    expect(res.to).toBe(sq(0, 4));
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });
 

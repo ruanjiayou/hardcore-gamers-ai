@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import XiangqiBot from '../src/bots/xiangqi/index';
-import { RED } from '../src/xiangqi/core';
+import { RED } from '../src/engine/xiangqi/core';
 
 /**
  * 回归测试：象棋机器人对局状态自愈（与五子棋同源 bug）。

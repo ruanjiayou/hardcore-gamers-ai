@@ -2,7 +2,7 @@ import { io, Socket } from "socket.io-client";
 import type { WorkerPool } from "@/core/WorkerPool";
 import type { IBotInfo, IPlayer } from "@/types";
 import { BotFather } from "@/types";
-import { createInitialBoard, type OBoard } from '@/othello/engine';
+import { createInitialBoard, type OBoard } from '@/engine/othello';
 import rootLogger from '@/logger';
 
 const logger = rootLogger.child({ service: 'othello' });
@@ -77,9 +77,11 @@ export default class OthelloBot extends BotFather {
         this.resumeFromRoomDetail();
         return;
       }
-      const isMine = data.curr_turn === this.config.player_id;
+      // 轮次以服务端权威 next_turn 为准，不看 curr_turn：
+      // 黑白棋存在"对手无棋被跳过、回合不轮换"（skip:true）的情况，
+      // 此时 curr_turn 也是机器人自己，仍应继续落子。
       this.applyServerMove(data);
-      if (!isMine && data.next_turn === this.config.player_id) this.automate();
+      if (data.next_turn === this.config.player_id) this.automate();
     });
     return this;
   }
@@ -163,9 +165,10 @@ export default class OthelloBot extends BotFather {
     return this.config.role === 'white' ? WHITE : BLACK;
   }
 
-  /** 应用服务端走法：落子 + 翻转 + 轮次翻转 */
+  /** 应用服务端走法：落子 + 翻转 + 按权威 next_turn 对齐轮次 */
   private applyServerMove(data: {
     to: [number, number]; color: string; flips?: [number, number][]; pass?: boolean;
+    next_turn?: string;
   }) {
     const b = this.state.board;
     if (!data.pass && data.to && data.to[0] >= 0) {
@@ -173,8 +176,15 @@ export default class OthelloBot extends BotFather {
       b[data.to[0]][data.to[1]] = color;
       (data.flips || []).forEach(([r, c]) => { b[r][c] = color; });
     }
-    // 黑白棋每次落子都轮换回合；pass 也换回合（服务端 next_turn 已处理，这里按广播翻转）
-    this.state.side = -this.state.side;
+    // 由服务端 next_turn 决定轮次，不再无条件翻转：
+    // 对手无棋被跳过时服务端回合不轮换（skip:true / next_turn 仍是落子方），
+    // 无条件翻转会让机器人 side 错乱、停手卡死。
+    if (data.next_turn) {
+      this.state.side = data.next_turn === this.config.player_id ? this.myColor() : -this.myColor();
+    } else {
+      // 终局广播 next_turn 为空，按落子方翻转兜底（即将重置）
+      this.state.side = -this.state.side;
+    }
   }
 
   override destroy(): void {

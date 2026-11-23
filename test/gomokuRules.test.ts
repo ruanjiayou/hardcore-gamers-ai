@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { BLACK, WHITE, checkForbidden, isFive, isWinningMove } from '../src/games/gomokuRules';
+import { BLACK, WHITE, checkForbidden, isFive, isWinningMove } from '../src/engine/gomoku';
 
 function emptyBoard(n = 15) {
   return Array.from({ length: n }, () => new Array(n).fill(0));

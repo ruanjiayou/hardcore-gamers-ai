@@ -9,7 +9,7 @@ import {
 } from './core';
 import type { Move } from './core';
 import { evaluateRed } from './evaluate';
-import ZobristTT, { TTFlag } from '../utils/ZobristTT';
+import ZobristTT, { TTFlag } from '@/utils/ZobristTT';
 
 const MATE = 1000000;
 const MAX_PLY = 64;
@@ -26,6 +26,12 @@ export interface SearchOptions {
   maxDepth?: number;      // 最大搜索深度（ply），默认 8
   timeLimitMs?: number;   // 时间预算，默认 4000ms
   tt?: ZobristTT;         // 复用置换表
+  /** 完成该深度后才允许「稳定早停」；被将军时应将着法少，默认降到 2 */
+  minDepth?: number;
+  /** 最佳着法连续几层不变即提前返回；被将军时默认 1 层 */
+  stablePlies?: number;
+  /** 连续层的分数差小于该值才算稳定 */
+  stableScoreDelta?: number;
 }
 
 export class XiangqiSearch {
@@ -62,6 +68,15 @@ export class XiangqiSearch {
     const rootMoves = pos.legalMoves();
     if (rootMoves.length === 0) return best;
 
+    // 被将军时应将选择有限、且必须尽快回应：放宽早停条件，避免把时间预算耗满。
+    const inCheckAtRoot = pos.inCheck(pos.side);
+    const minDepth = opts.minDepth ?? (inCheckAtRoot ? 2 : 4);
+    const stablePlies = opts.stablePlies ?? (inCheckAtRoot ? 1 : 2);
+    const stableScoreDelta = opts.stableScoreDelta ?? 40;
+    let stableCount = 0;
+    let prevKey = -1;
+    let prevScore = 0;
+
     let ordered = rootMoves.slice();
     for (let depth = 1; depth <= maxDepth; depth++) {
       if (Date.now() > this.deadline) break;
@@ -84,17 +99,32 @@ export class XiangqiSearch {
         }
         if (score > alpha) alpha = score;
       }
-      if (this.stopped && !localBest) break;
+      if (this.stopped) {
+        // 时间到：本层只搜了一部分，不能用半层结果覆盖上一层完整搜索的结论
+        if (best.from < 0 && localBest) {
+          best = { from: localBest.from, to: localBest.to, score: localScore, depth, nodes: this.nodes };
+        }
+        break;
+      }
       if (localBest) {
         best = {
           from: localBest.from, to: localBest.to, score: localScore,
           depth, nodes: this.nodes,
         };
+        // 稳定性早停：达到最小深度后最佳着法连续不变、评分也接近，说明再加深收益很小。
+        // 只有完整搜完的一层才计数，超时中断的半层不参与判断。
+        if (!this.stopped && depth >= minDepth) {
+          const key = localBest.from * SQ + localBest.to;
+          if (key === prevKey && Math.abs(localScore - prevScore) <= stableScoreDelta) stableCount += 1;
+          else stableCount = 0;
+          prevKey = key;
+          prevScore = localScore;
+        }
         // PV 优先：把上一层最佳着法排到最前
         ordered = this.orderRoot(ordered, localBest);
       }
-      // 找到绝杀，提前结束
-      if (localScore > MATE - 1000) break;
+      // 找到绝杀，或最佳着法已稳定，提前结束——不必把时间预算耗满
+      if (localScore > MATE - 1000 || stableCount >= stablePlies) break;
     }
     best.nodes = this.nodes;
     return best;

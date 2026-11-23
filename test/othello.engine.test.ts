@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   createInitialBoard, flipsFor, legalMoves, chooseMove, BLACK, WHITE, SIZE,
-} from '../src/othello/engine';
+} from '../src/engine/othello';
 import { computeMove } from '../src/workers/othello';
 
 describe('黑白棋 AI 引擎', () => {

@@ -18,7 +18,8 @@ function snap(
   w = 1200,
   h = 900,
 ): SnakeSnapshotLike {
-  return { w, h, radius: 12, food, snakes, status: 'playing' };
+  // 场上可拾取物统一为 {x, y, v, k}（服务端新格式）
+  return { w, h, radius: 12, food: food.map(([x, y]) => ({ x, y, v: 5, k: 0 })), snakes, status: 'playing' };
 }
 
 const norm = (a: number) => {
@@ -76,6 +77,57 @@ describe('贪吃蛇 AI（连续像素）', () => {
     const angle = chooseAngle(state, 'me');
     expect(angle).not.toBeNull();
     expect(Number.isFinite(angle as number)).toBe(true);
+  });
+
+  test('大食物优先级更高：同样距离时先奔大food去', () => {
+    const base = [snake('me', 300, 300, 0)];
+    // 小食物在正前方 100px，大食物在斜前方 160px（更远但更值钱）
+    const state: SnakeSnapshotLike = {
+      w: 1200, h: 900, radius: 12, status: 'playing',
+      food: [
+        { x: 400, y: 300, v: 5, k: 0 },
+        { x: 400, y: 400, v: 30, k: 0 },
+      ],
+      snakes: base,
+    };
+    const angle = chooseAngle(state, 'me') as number;
+    // 应当偏向大食物（下方），而不是正前方的小食物
+    expect(angle).toBeGreaterThan(10 * DEG);
+  });
+
+  test('道具（v=0）优先级低于食物：附近有食物时不特意绕路去吃道具', () => {
+    const state: SnakeSnapshotLike = {
+      w: 1200, h: 900, radius: 12, status: 'playing',
+      food: [
+        { x: 390, y: 300, v: 0, k: 2 },   // 磁铁，正前方 90px
+        { x: 300, y: 460, v: 5, k: 0 },   // 普通食物，下方 160px
+      ],
+      snakes: [snake('me', 300, 300, 0)],
+    };
+    const angle = chooseAngle(state, 'me') as number;
+    // 应当奔食物（向下），而不是直冲价值为 0 的道具
+    expect(angle).toBeGreaterThan(30 * DEG);
+  });
+
+  test('只有道具时也会去吃（不饿死）', () => {
+    const state: SnakeSnapshotLike = {
+      w: 1200, h: 900, radius: 12, status: 'playing',
+      food: [{ x: 400, y: 300, v: 0, k: 2 }],
+      snakes: [snake('me', 300, 300, 0)],
+    };
+    const angle = chooseAngle(state, 'me') as number;
+    expect(Math.abs(arc(0, angle))).toBeLessThan(0.2);
+  });
+
+  test('兼容旧版快照的 [x, y] 元组食物格式', () => {
+    const state = {
+      w: 1200, h: 900, radius: 12, status: 'playing',
+      food: [[420, 300]] as any,
+      snakes: [snake('me', 300, 300, 0)],
+    } as unknown as SnakeSnapshotLike;
+    const angle = chooseAngle(state, 'me') as number;
+    expect(angle).not.toBeNull();
+    expect(Math.abs(arc(0, angle))).toBeLessThan(0.2);
   });
 
   test('返回的角度始终合法（0~2π）', () => {

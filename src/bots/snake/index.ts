@@ -31,6 +31,8 @@ export default class SnakeBot extends BotFather {
 
   private lastTick = -1;
   private lastAngle = Number.NaN;
+  /** 上次请求重生的时间戳：死亡后自动复活（人机不会点弹框按钮） */
+  private lastRespawnAt = 0;
 
   constructor(data: IBotInfo, workerPool: WorkerPool) {
     super();
@@ -92,7 +94,21 @@ export default class SnakeBot extends BotFather {
     }
 
     const me = state.snakes.find(s => s.id === this.config.player_id);
-    if (!me || !me.alive) return;
+    if (!me) return;
+
+    // 无尽模式死了就自动重生：真人会点弹框里的「重生」，人机不会，
+    // 不重生的话它就永久躺在场上当尸体。
+    if (!me.alive) {
+      const now = Date.now();
+      if (now - this.lastRespawnAt > 1000) {
+        this.lastRespawnAt = now;
+        this.socket?.emit(SendoutEvent.PlayerAction, this.config.match_id, {
+          player_id: this.config.player_id,
+          respawn: true,
+        });
+      }
+      return;
+    }
 
     const angle = chooseAngle(state, this.config.player_id);
     if (angle === null) return;

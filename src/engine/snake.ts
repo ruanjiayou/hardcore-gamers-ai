@@ -10,11 +10,21 @@
  * 纯函数，便于单测；不依赖 socket/worker。
  */
 
+/** 场上可拾取物：普通食物（分档）/ 尸体残骸 / 磁铁 / 闪电 */
+export interface SnakeFoodLike {
+  x: number;
+  y: number;
+  /** 分值（道具为 0） */
+  v?: number;
+  /** 类型：0 普通食物 / 1 残骸 / 2 磁铁 / 3 闪电 */
+  k?: number;
+}
+
 export interface SnakeSnapshotLike {
   w: number;
   h: number;
   radius?: number;
-  food: [number, number][];
+  food: SnakeFoodLike[];
   snakes: {
     id: string;
     x: number;
@@ -58,11 +68,19 @@ export function chooseAngle(state: SnakeSnapshotLike, myId: string): number | nu
   const hx = me.x;
   const hy = me.y;
 
-  // 最近的食物（像素距离）
+  // 最近的食物（像素距离）：分档后大食物更值钱，用"距离 ÷ 价值权重"排序；
+  // 道具（v=0）只作兜底目标。
   let target: [number, number] | null = null;
   let best = Infinity;
-  for (const [fx, fy] of state.food) {
-    const d = (fx - hx) ** 2 + (fy - hy) ** 2;
+  for (const f of state.food) {
+    // 兼容旧版快照的 [x, y] 元组格式
+    const fx = typeof f?.x === 'number' ? f.x : (f as any)?.[0];
+    const fy = typeof f?.y === 'number' ? f.y : (f as any)?.[1];
+    if (typeof fx !== 'number' || typeof fy !== 'number') continue;
+    const v = typeof f.v === 'number' ? f.v : 0;
+    // 价值权重：大食物更值得跑过去，道具（v=0）排在最后
+    const weight = v > 0 ? 1 + v * 0.15 : 0.25;
+    const d = ((fx - hx) ** 2 + (fy - hy) ** 2) / weight;
     if (d < best) {
       best = d;
       target = [fx, fy];

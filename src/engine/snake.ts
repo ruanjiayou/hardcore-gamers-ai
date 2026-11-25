@@ -44,9 +44,6 @@ export const isDifficulty = (v: unknown): v is Difficulty =>
   v === 'easy' || v === 'normal' || v === 'hard' || v === 'master';
 
 /** 与服务端规则对齐的关键常量（AI 侧镜像，避免两处漂移） */
-const SPEED = 125;
-const BOOST_SPEED = 314.5;
-const BOOST_MULT = BOOST_SPEED / SPEED;
 const BOOST_MIN_LEN = 120;
 /** 逃离触发半径 */
 const FLEE_R = 90;

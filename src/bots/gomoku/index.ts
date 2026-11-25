@@ -109,7 +109,7 @@ export default class GomokuBotInstance extends BotFather {
     this.socket.connect();
     // 关键修复：用 on 而非 once。socket 断线重连后会再次触发 connect，
     // 必须重新加入 room 频道并恢复对局，否则重连后机器人"哑火"。
-    this.socket.on('connect', () => {
+    this.on('connect', () => {
       // 添加机器人后自动加入房间
       this.socket?.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id, type: 'player' }, (success: boolean) => {
         logger.info(`玩家 ${this.config.player_id} 加入房间 ${success}`)
@@ -119,19 +119,19 @@ export default class GomokuBotInstance extends BotFather {
         this.resumeFromRoomDetail();
       });
     });
-    this.socket.on(ReceiveEvent.GameStart, async (data: { room_id: string, match_id: string }) => {
+    this.on(ReceiveEvent.GameStart, async (data: { room_id: string, match_id: string }) => {
       if (!data?.match_id) return;
       this.config.match_id = data.match_id;
       // 游戏开始,先获取数据
       this.getMatchState(data.match_id);
     })
-    this.socket.on(ReceiveEvent.GameOver, () => {
+    this.on(ReceiveEvent.GameOver, () => {
       // 结束时初始化
       this.state.board = Array(15).fill(0).map(() => Array(15).fill(0));
       // this.state.turn = 'balck';不变
       this.state.hash = 0n;
     })
-    this.socket.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: GomokuRole } }) => {
+    this.on(ReceiveEvent.PlayerAction, async (data: { curr_turn: string, next_turn: string, to: { x: number, y: number, role: GomokuRole } }) => {
       logger.info(`${this.config.player_id} 收到 player action: ${data.curr_turn} ${data.to.x},${data.to.y}`)
       // 兜底自愈：若角色/对局状态尚未初始化（game-start 事件丢失或到达时还没入房），
       // 先主动拉一次权威对局状态。getMatchState 内部会在轮到自己时触发落子。

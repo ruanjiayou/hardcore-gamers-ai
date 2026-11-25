@@ -25,6 +25,20 @@ export class BotManager {
     if (!GameRobot) {
       throw new Error('Unsupported game type')
     }
+    // 同一个 player 重复添加时，先把旧实例彻底销毁：
+    // 否则新旧两个 socket 用同一张票据连服务端，会触发服务端的「多端登录」互踢，
+    // 新连接把旧连接踢掉、旧连接又重连……表现为 bot 反复上下线（本地日志里能看到
+    // 同一个 player 出现两条「加入房间」记录）。
+    const existed = this.robots.get(data.player_id);
+    if (existed) {
+      logger.warn(`玩家 ${data.player_id} 重复添加，先销毁旧实例`);
+      try {
+        existed.destroy();
+      } catch (e) {
+        logger.error({ player_id: data.player_id, err: (e as Error)?.message }, '销毁旧 bot 实例失败');
+      }
+      this.robots.delete(data.player_id);
+    }
     this.robots.set(data.player_id, new GameRobot(data, this.workerPool).initial());
     logger.info(`Bot ${data.player_id} joined ${data.slug}`);
   }

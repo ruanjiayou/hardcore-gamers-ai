@@ -7,10 +7,35 @@ const logger = rootLogger.child({
   user_id: "system"
 })
 
+/**
+ * 进程级兜底：**单�� bot 出错不许把整个 robot 服务带走**。
+ *
+ * 历史事故：贪吃蛇快照从全量改成增量（`foodAdd/foodDel`）后，线上 robot 跑的还是
+ * 旧引擎（直读 `state.food`），增量帧里 `state.food` 是 undefined → 监听器里抛
+ * `TypeError` → socket.io 的事件回调没有 try/catch，异常直接冒泡成 uncaughtException
+ * → 整个 robot 进程退出 → 所有 bot 一起断线（服务端看到的是 `transport close`）
+ * → 容器重启后再次崩溃，无限循环。
+ *
+ * 所以这里：
+ * 1. `uncaughtException` 只记日志、不退出进程（退出 = 全体 bot 陪葬）；
+ * 2. 真正的隔离在 bot 内部做（SnakeBot 的事件处理器逐个 try/catch）。
+ */
+process.on('uncaughtException', (err) => {
+  logger.error({ err: err?.message, stack: err?.stack }, '未捕获异常（已兜住，进程继续运行）');
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason: reason instanceof Error ? reason.message : String(reason) }, '未处理的 Promise 拒绝（进程继续运行）');
+});
+
 const manager = new BotManager();
 sqlite.getRobots().forEach(robot => {
   logger.info(robot, `玩家 ${robot.player_id} 重新连接`)
-  manager.addBot(robot)
+  try {
+    manager.addBot(robot)
+  } catch (e) {
+    // 一个 bot 恢复失败不许阻断其余 bot 的恢复
+    logger.error({ robot, err: (e as Error)?.message }, '恢复 bot 失败，跳过')
+  }
 })
 // 使用 Bun.serve 创建一个高性能控制接口
 
@@ -31,12 +56,14 @@ const server = Bun.serve({
           $role: data.role || 1,
           $match_id: data.match_id || '',
           $room_id: data.room_id,
-          $ticket: data.ticket
+          $ticket: data.ticket,
+          $difficulty: data.difficulty || '',
         }), '保存人机信息')
         return new Response(JSON.stringify({ code: 0 }), {
           headers: { "Content-Type": "application/json" }
         });
       } catch (e) {
+        logger.error({ err: (e as Error)?.message }, '添加失败')
         return new Response(JSON.stringify({ code: -1, message: '添加失败' }));
       }
     }

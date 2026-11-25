@@ -66,7 +66,7 @@ export default class XiangqiBot extends BotFather {
     });
     this.socket.connect();
     // 用 on 而非 once：断线重连后要重新入房并恢复对局，否则重连后机器人"哑火"。
-    this.socket.on('connect', () => {
+    this.on('connect', () => {
       this.socket?.emit(SendoutEvent.JoinRoom, { room_id: this.config.room_id, type: 'player' }, (success: boolean) => {
         logger.info(`象棋机器人 ${this.config.player_id} 加入房间 ${success}`)
         if (!success) return;
@@ -75,16 +75,16 @@ export default class XiangqiBot extends BotFather {
         this.resumeFromRoomDetail();
       });
     });
-    this.socket.on(ReceiveEvent.GameStart, (data: { room_id: string, match_id: string }) => {
+    this.on(ReceiveEvent.GameStart, (data: { room_id: string, match_id: string }) => {
       if (!data?.match_id) return;
       this.config.match_id = data.match_id;
       this.getMatchState(data.match_id);
     });
-    this.socket.on(ReceiveEvent.GameOver, () => {
+    this.on(ReceiveEvent.GameOver, () => {
       this.resetState();
       this.thinking = false;
     });
-    this.socket.on(ReceiveEvent.PlayerAction, (data: {
+    this.on(ReceiveEvent.PlayerAction, (data: {
       curr_turn: string; next_turn: string;
       from: [number, number]; to: [number, number];
     }) => {

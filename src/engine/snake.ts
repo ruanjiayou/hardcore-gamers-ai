@@ -43,8 +43,12 @@ export const DEFAULT_DIFFICULTY: Difficulty = 'normal';
 export const isDifficulty = (v: unknown): v is Difficulty =>
   v === 'easy' || v === 'normal' || v === 'hard' || v === 'master';
 
-/** 与服务端规则对齐的关键常量（AI 侧镜像，避免两处漂移） */
-const BOOST_MIN_LEN = 120;
+/**
+ * 与服务端规则对齐的关键常量（AI 侧镜像，避免两处漂移）。
+ * 加速门槛**不写死**：后台改 `boostMinLen` 后快照会带新值，
+ * 这里读快照的值，保证人机与真人用同一套门槛。
+ */
+export const DEFAULT_BOOST_MIN_LEN = 120;
 /** 逃离触发半径 */
 const FLEE_R = 90;
 /** 前方威胁扇形（±75°） */
@@ -97,6 +101,11 @@ export interface BotView {
   tick: number;
   /** 团队模式剩余毫秒（0 = 不限时） */
   teamTimeLeft: number;
+  /**
+   * 加速门槛（身长像素）：来自快照 params（服务端建局时冻结的那份）。
+   * 缺省用默认值 —— 老对局没有 params 字段。
+   */
+  boostMinLen?: number;
 }
 
 export interface BotMemory {
@@ -167,6 +176,10 @@ export function decideBot(
   const holding = (angle: number) => normalize(angle + gaussian(random, profile.noiseRad));
   if (!self.alive) return { steerAngle: self.angle, wantBoostHeld: false, mode: mem.mode };
 
+  // 加速门槛：读快照里的 boostMinLen（服务端建局冻结的那份），后台改参数人机同步生效。
+  // 再留 80px 余量：加速会持续扣身长，卡在门槛上会立刻掉回巡航，等于没加速。
+  const boostGate = (view.boostMinLen ?? DEFAULT_BOOST_MIN_LEN) + 80;
+
   // 1. 危险检测：前方扇形内、距蛇头 < safe 的敌蛇身体点
   const threats: { d: number; x: number; y: number }[] = [];
   let nearestEnemyHead: { d: number; bearing: number; length: number; x: number; y: number } | null = null;
@@ -213,7 +226,7 @@ export function decideBot(
     if (allow && self.length > 250) {
       mem.mode = 'hunt';
       const aim = Math.atan2(nearestEnemyHead.y - self.y, nearestEnemyHead.x - self.x);
-      return { steerAngle: holding(aim), wantBoostHeld: self.length > BOOST_MIN_LEN + 80, mode: mem.mode };
+      return { steerAngle: holding(aim), wantBoostHeld: self.length > boostGate, mode: mem.mode };
     }
   }
 
@@ -232,7 +245,7 @@ export function decideBot(
     if (wallPush > 0) steer = steer + arc(steer, wallAngle) * 0.5;
     mem.mode = 'flee';
     mem.targetId = undefined;
-    const wantBoost = self.length > BOOST_MIN_LEN + 80 && threats[0].d < 50;
+    const wantBoost = self.length > boostGate && threats[0].d < 50;
     return { steerAngle: holding(steer), wantBoostHeld: wantBoost, mode: mem.mode };
   }
 
@@ -281,7 +294,7 @@ export function decideBot(
   }
 
   // 6. 加速：目标远且前方无威胁
-  const wantBoost = self.length > BOOST_MIN_LEN + 80
+  const wantBoost = self.length > boostGate
     && bestDist > 450
     && threats.length === 0;
 

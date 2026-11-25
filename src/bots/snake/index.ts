@@ -47,6 +47,8 @@ interface SnakeSnapshot {
   foodMove?: { id: number; x: number; y: number }[];
   /** 增量帧：true = 全量帧，food 字段有效；false = 增量帧，用 foodAdd/foodDel/foodMove */
   foodFull?: boolean;
+  /** 本局冻结的玩法参数（服务端建局时写入，之后不变） */
+  params?: { boostMinLen?: number };
   snakes?: {
     id: string;
     team?: string;
@@ -210,6 +212,8 @@ export default class SnakeBot extends BotFather {
       now,
       tick: state.tick || 0,
       teamTimeLeft: state.endsIn || 0,
+      // 加速门槛读本局冻结的参数：后台改 boostMinLen 后人机与真人同一套门槛
+      boostMinLen: state.params?.boostMinLen,
     };
 
     const decision = decideBot(view, this.mem, this.profile);
